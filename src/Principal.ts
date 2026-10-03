@@ -118,6 +118,44 @@ document.getElementById('BotonEliminarClave')!.onclick = () => Linea.EliminarSel
 };
 
 // ----------------------------------------------------------------------------
+// Interacción 3D: Selección y rotación de huesos en el visor
+// ----------------------------------------------------------------------------
+
+import * as THREE from 'three';
+
+const Raycaster = new THREE.Raycaster();
+const PosicionRaton = new THREE.Vector2();
+
+document.getElementById('Visor3D')!.addEventListener('mousedown', (E) => {
+  if (Escena.ControlTransformacion.dragging) return;
+
+  const Rect = (E.target as HTMLElement).getBoundingClientRect();
+  PosicionRaton.x = ((E.clientX - Rect.left) / Rect.width) * 2 - 1;
+  PosicionRaton.y = -((E.clientY - Rect.top) / Rect.height) * 2 + 1;
+
+  Raycaster.setFromCamera(PosicionRaton, Escena.Camara);
+  const Intersecciones = Raycaster.intersectObjects(Modelos.Colliders);
+
+  if (Intersecciones.length > 0) {
+    const HuesoColisionado = Intersecciones[0].object;
+    const NombreHueso = HuesoColisionado.userData.boneName;
+    const NodoHueso = Modelos.ObtenerNodoHueso(NombreHueso);
+    if (NodoHueso) {
+      Escena.ControlTransformacion.attach(NodoHueso);
+      Panel.SeleccionarHueso(NombreHueso);
+    }
+  } else if (!Escena.ControlTransformacion.dragging) {
+    // Escena.ControlTransformacion.detach(); // Opcional: Deseleccionar al hacer clic en el vacío
+  }
+});
+
+Escena.ControlTransformacion.addEventListener('change', () => {
+  if (Escena.ControlTransformacion.object) {
+    Panel.SincronizarDeslizadoresHueso();
+  }
+});
+
+// ----------------------------------------------------------------------------
 // Proyecto: nuevo, abrir y guardar
 // ----------------------------------------------------------------------------
 
@@ -200,6 +238,7 @@ ContenedorVisor.addEventListener('drop', async (E) => {
   const Nombre = Archivo.name.toLowerCase();
   try {
     if (Nombre.endsWith('.vrm')) {
+      Escena.ControlTransformacion.detach();
       await Modelos.CargarVrm(Archivo);
       Panel.RefrescarDinamico();
       Contexto.NotificarEstado(`Modelo cargado: ${Archivo.name}`);
@@ -251,6 +290,15 @@ window.addEventListener('keydown', (E) => {
     const Paso = E.shiftKey ? 1 : 1 / 30;
     Animacion.EstablecerTiempo(Animacion.TiempoActual + (E.key === 'ArrowRight' ? Paso : -Paso));
     Animacion.EvaluarEn(Animacion.TiempoActual);
+  } else if (E.key.toLowerCase() === 'q') {
+    Escena.ControlTransformacion.detach();
+  } else if (E.key.toLowerCase() === 'w') {
+    Escena.ControlTransformacion.setMode('translate');
+  } else if (E.key.toLowerCase() === 'e') {
+    Escena.ControlTransformacion.setMode('rotate');
+  } else if (E.key.toLowerCase() === 'r') {
+    Escena.ControlTransformacion.setSpace(Escena.ControlTransformacion.space === 'local' ? 'world' : 'local');
+    Contexto.NotificarEstado(`Espacio de transformación: ${Escena.ControlTransformacion.space}`);
   }
 });
 

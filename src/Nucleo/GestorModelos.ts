@@ -40,6 +40,8 @@ export class GestorModelos {
   public PoseReposo = new Map<string, DatosReposoHueso>();
   private Ayudante: THREE.SkeletonHelper | null = null;
 
+  public Colliders: THREE.Mesh[] = [];
+
   constructor(private Escena: THREE.Scene) {}
 
   /** Carga un modelo VRM desde un archivo local y lo deja en pose de reposo. */
@@ -68,6 +70,31 @@ export class GestorModelos {
     this.NombreModelo = Archivo.name;
     this.Escena.add(Vrm.scene);
     this.GuardarPoseReposo();
+    this.ActualizarColliders();
+  }
+
+  private ActualizarColliders(): void {
+    // Eliminar colliders anteriores
+    this.Colliders.forEach(C => C.parent?.remove(C));
+    this.Colliders = [];
+
+    if (!this.Vrm) return;
+
+    // Crear geometría genérica para los colliders (esfera pequeña)
+    // El material es invisible (opacity 0) pero sigue siendo clickeable por el raycaster
+    const Geometria = new THREE.SphereGeometry(0.08, 8, 8);
+    const Material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false });
+
+    for (const Nombre of this.ObtenerHuesosDisponibles()) {
+      const Nodo = this.ObtenerNodoHueso(Nombre);
+      if (Nodo) {
+        const Collider = new THREE.Mesh(Geometria, Material);
+        Collider.name = `Collider_${Nombre}`;
+        Collider.userData = { isBoneCollider: true, boneName: Nombre };
+        Nodo.add(Collider);
+        this.Colliders.push(Collider);
+      }
+    }
   }
 
   /** Carga un modelo VRM desde una URL (modelo de ejemplo). */
@@ -112,6 +139,8 @@ export class GestorModelos {
     }
     this.QuitarAyudante();
     this.PoseReposo.clear();
+    this.Colliders.forEach(C => C.parent?.remove(C));
+    this.Colliders = [];
   }
 
   /** Captura la pose actual como pose de reposo de referencia. */

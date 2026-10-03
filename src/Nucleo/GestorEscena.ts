@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -17,6 +18,7 @@ export class GestorEscena {
   public Escena!: THREE.Scene;
   public Camara!: THREE.PerspectiveCamera;
   public Controles!: OrbitControls;
+  public ControlTransformacion!: TransformControls;
 
   private Compositor: EffectComposer | null = null;
   private PaseBloom: UnrealBloomPass | null = null;
@@ -60,6 +62,15 @@ export class GestorEscena {
     this.Controles.enableDamping = true;
     this.Controles.dampingFactor = 0.08;
     this.Controles.maxDistance = 25;
+
+    // Control de transformación para manipular huesos directamente
+    this.ControlTransformacion = new TransformControls(this.Camara, this.Renderer.domElement);
+    this.ControlTransformacion.setMode('rotate');
+    this.ControlTransformacion.setSpace('local');
+    this.ControlTransformacion.addEventListener('dragging-changed', (E) => {
+      this.Controles.enabled = !E.value;
+    });
+    this.Escena.add(this.ControlTransformacion.getHelper());
 
     // Iluminación principal tipo estudio
     this.LuzDireccional = new THREE.DirectionalLight(0xffffff, 2.2);

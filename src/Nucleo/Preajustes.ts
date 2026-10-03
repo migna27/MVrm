@@ -148,74 +148,38 @@ export const CATALOGO_PREAJUSTES: PreajusteAnimacion[] = [
     ]
   },
   {
-    Nombre: 'T-Pose (Referencia)',
-    Descripcion: 'Pose estándar en T para calibración o inicio.',
+    Nombre: 'Brazos abajo (A-Pose)',
+    Descripcion: 'Pose relajada con brazos a los lados.',
     Duracion: 1,
     Generar: (I) => [
-      PistaHueso('leftUpperArm', I, [[0, [0, 0, 1.57]]]),
-      PistaHueso('rightUpperArm', I, [[0, [0, 0, -1.57]]]),
-      PistaHueso('leftLowerArm', I, [[0, [0, 0, 0]]]),
-      PistaHueso('rightLowerArm', I, [[0, [0, 0, 0]]])
+      PistaHueso('leftUpperArm', I, [[0, [0, 0, -1.2]]]),
+      PistaHueso('rightUpperArm', I, [[0, [0, 0, 1.2]]])
     ]
   },
   {
-    Nombre: 'Pose de combate (Guardia)',
-    Descripcion: 'Puños arriba protegiendo el rostro.',
+    Nombre: 'T-Pose (Restaurar)',
+    Descripcion: 'Restaura la pose de referencia T-Pose.',
     Duracion: 1,
     Generar: (I) => [
-      PistaHueso('leftUpperArm', I, [[0, [0.5, 0.2, 0.4]]]),
-      PistaHueso('rightUpperArm', I, [[0, [0.5, -0.2, -0.4]]]),
-      PistaHueso('leftLowerArm', I, [[0, [-1.8, 0, 0]]]),
-      PistaHueso('rightLowerArm', I, [[0, [-1.8, 0, 0]]]),
-      PistaHueso('leftUpperLeg', I, [[0, [-0.2, 0.2, 0.2]]]),
-      PistaHueso('rightUpperLeg', I, [[0, [-0.2, -0.2, -0.2]]]),
-      PistaHueso('leftLowerLeg', I, [[0, [0.3, 0, 0]]]),
-      PistaHueso('rightLowerLeg', I, [[0, [0.3, 0, 0]]]),
-      PistaPosicion('hips', I, [[0, [0, -0.15, 0]]])
-    ]
-  },
-  {
-    Nombre: 'Sentarse en el suelo',
-    Descripcion: 'Piernas cruzadas y brazos descansando.',
-    Duracion: 1,
-    Generar: (I) => [
-      PistaHueso('leftUpperLeg', I, [[0, [-1.5, 0.5, 0.5]]]),
-      PistaHueso('rightUpperLeg', I, [[0, [-1.5, -0.5, -0.5]]]),
-      PistaHueso('leftLowerLeg', I, [[0, [2.5, 0, 0]]]),
-      PistaHueso('rightLowerLeg', I, [[0, [2.5, 0, 0]]]),
-      PistaHueso('leftUpperArm', I, [[0, [0.2, 0, 0.3]]]),
-      PistaHueso('rightUpperArm', I, [[0, [0.2, 0, -0.3]]]),
-      PistaHueso('leftLowerArm', I, [[0, [-0.5, 0, 0]]]),
-      PistaHueso('rightLowerArm', I, [[0, [-0.5, 0, 0]]]),
-      PistaPosicion('hips', I, [[0, [0, -0.45, 0]]])
-    ]
-  },
-  {
-    Nombre: 'Magia / Lanzar hechizo',
-    Descripcion: 'Brazos extendidos hacia el frente con dramatismo.',
-    Duracion: 2,
-    Generar: (I) => [
-      PistaHueso('leftUpperArm', I, [[0, [-1.2, 0.4, 0.2]], [1, [-1.4, 0.5, 0.1]], [2, [-1.2, 0.4, 0.2]]]),
-      PistaHueso('rightUpperArm', I, [[0, [-1.2, -0.4, -0.2]], [1, [-1.4, -0.5, -0.1]], [2, [-1.2, -0.4, -0.2]]]),
+      PistaHueso('leftUpperArm', I, [[0, [0, 0, 0]]]),
+      PistaHueso('rightUpperArm', I, [[0, [0, 0, 0]]]),
       PistaHueso('leftLowerArm', I, [[0, [0, 0, 0]]]),
       PistaHueso('rightLowerArm', I, [[0, [0, 0, 0]]]),
-      PistaHueso('spine', I, [[0, [-0.2, 0, 0]], [1, [-0.3, 0, 0]], [2, [-0.2, 0, 0]]]),
-      PistaHueso('head', I, [[0, [0.2, 0, 0]], [1, [0.3, 0, 0]], [2, [0.2, 0, 0]]]),
-      PistaExpresion('angry', I, [[0, [1]]])
+      PistaHueso('spine', I, [[0, [0, 0, 0]]]),
+      PistaHueso('head', I, [[0, [0, 0, 0]]]),
+      PistaHueso('leftUpperLeg', I, [[0, [0, 0, 0]]]),
+      PistaHueso('rightUpperLeg', I, [[0, [0, 0, 0]]])
     ]
   },
   {
-    Nombre: 'Victoria / Celebración',
-    Descripcion: 'Brazos en alto formando una V.',
+    Nombre: 'Brazos cruzados',
+    Descripcion: 'Ambos brazos cruzados sobre el pecho.',
     Duracion: 1,
     Generar: (I) => [
-      PistaHueso('leftUpperArm', I, [[0, [0, 0, 2.5]]]),
-      PistaHueso('rightUpperArm', I, [[0, [0, 0, -2.5]]]),
-      PistaHueso('leftLowerArm', I, [[0, [0, 0, 0]]]),
-      PistaHueso('rightLowerArm', I, [[0, [0, 0, 0]]]),
-      PistaHueso('spine', I, [[0, [-0.1, 0, 0]]]),
-      PistaHueso('head', I, [[0, [-0.2, 0, 0]]]),
-      PistaExpresion('happy', I, [[0, [1]]])
+      PistaHueso('leftUpperArm', I, [[0, [0, 0.4, -1.2]]]),
+      PistaHueso('rightUpperArm', I, [[0, [0, -0.4, 1.2]]]),
+      PistaHueso('leftLowerArm', I, [[0, [0, -1.5, 0]]]),
+      PistaHueso('rightLowerArm', I, [[0, [0, 1.5, 0]]])
     ]
   },
   {
@@ -226,10 +190,8 @@ export const CATALOGO_PREAJUSTES: PreajusteAnimacion[] = [
       PistaHueso('spine', I, [[0, [0.3, 0, 0]]]),
       PistaHueso('neck', I, [[0, [0.2, 0, 0]]]),
       PistaHueso('head', I, [[0, [0.3, 0, 0]]]),
-      PistaHueso('leftUpperArm', I, [[0, [0.1, 0, 0.1]]]),
-      PistaHueso('rightUpperArm', I, [[0, [0.1, 0, -0.1]]]),
-      PistaHueso('leftLowerArm', I, [[0, [-0.1, 0, 0]]]),
-      PistaHueso('rightLowerArm', I, [[0, [-0.1, 0, 0]]]),
+      PistaHueso('leftUpperArm', I, [[0, [0, 0, -1.1]]]),
+      PistaHueso('rightUpperArm', I, [[0, [0, 0, 1.1]]]),
       PistaExpresion('sad', I, [[0, [0.8]]])
     ]
   },

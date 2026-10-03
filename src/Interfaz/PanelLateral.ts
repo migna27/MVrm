@@ -207,7 +207,7 @@ export class PanelLateral {
       })
     );
     Cuerpo.appendChild(Fila3);
-    this.Nota(Cuerpo, 'Consejo: selecciona un hueso, ajústalo con los deslizadores y pulsa «⬦» en el tiempo deseado. Con «Insertar pose» (abajo) se guardan todos los huesos a la vez.');
+    this.Nota(Cuerpo, 'Consejo: Puedes hacer clic directamente en el modelo 3D para seleccionar un hueso. Usa (W) mover, (E) rotar, (R) local/mundo y (Q) para deseleccionar.');
   }
 
   private async CargarModelo(Archivo: File): Promise<void> {
@@ -223,6 +223,7 @@ export class PanelLateral {
 
   private TrasCargarModelo(): void {
     const Ctx = this.Contexto;
+    Ctx.Escena.ControlTransformacion.detach();
     this.EtiquetaModelo.textContent = `Modelo: ${Ctx.Modelos.NombreModelo}`;
     this.ActualizarListaHuesos();
     this.ActualizarExpresiones();
@@ -241,7 +242,14 @@ export class PanelLateral {
     this.SincronizarDeslizadoresHueso();
   }
 
-  private SincronizarDeslizadoresHueso(): void {
+  public SeleccionarHueso(Nombre: string): void {
+    if (this.SelectorHuesos.value !== Nombre) {
+      this.SelectorHuesos.value = Nombre;
+      this.SincronizarDeslizadoresHueso();
+    }
+  }
+
+  public SincronizarDeslizadoresHueso(): void {
     const Nombre = this.SelectorHuesos.value;
     if (!Nombre) return;
     const Euler = this.Contexto.Modelos.ObtenerRotacionHueso(Nombre);
