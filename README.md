@@ -1,8 +1,8 @@
-# Animador VRM (Experimental v a-0.0.1)
+# Animador VRM (Experimental v a-0.0.2)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (v a-0.0.1)
+## Características (v a-0.0.2)
 
 - **Layout Profesional de 3 Paneles:** Flujo de trabajo ordenado con biblioteca de assets a la izquierda, visor 3D central y panel de propiedades e inspector a la derecha.
 - **Posado 3D Directo en Visor:** Posibilidad de seleccionar huesos directamente haciendo clic sobre el modelo 3D y utilizar un Gizmo visual (TransformControls) para aplicar rotaciones y traslaciones.
@@ -15,7 +15,7 @@ Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un 
 - **Catálogo de Poses Base:** Preajustes corregidos matemáticamente (T-Pose a rotaciones seguras) e integrados para animaciones básicas (Sentado, Combate, Victoria, Caminar, Respiración, etc). Soporta importación y mezcla de datos en formatos `.vrma` o `.json`.
 - **Motor de Escena y Efectos:** Personalización completa del fondo (color sólido, imagen estática o modelos 3D en formato GLB/GLTF/VRM), sistema de iluminación principal con "Bloom" y sistemas de partículas persistentes optimizados (Nieve, Lluvia, Burbujas, Magia, Chispas, Pétalos).
 - **Exportación 4K:** Sistema de renderizado secuencial a formato MP4 (H.264+AAC) o WebM que asegura tasa de fotogramas constante sin importar el rendimiento del hardware.
-- *(Nota de versión)* **Seguimiento por video (Video Tracking):** Extracción de poses a partir de video mediante MediaPipe (temporalmente oculto en esta versión experimental).
+- **Motor de Tracking Externo (Nuevo):** Reemplazo del motor interno por un backend robusto en Python (basado en MediaPipe). Incluye suavizado matemático Savitzky-Golay y un algoritmo de Cinemática Inversa (IK) anti-colisiones para evitar que las extremidades atraviesen el torso.
 
 ## Instalación Fácil (Windows)
 
