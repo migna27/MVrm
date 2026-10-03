@@ -69,6 +69,64 @@ function localAssetsPlugin() {
 
         next();
       });
+
+      // 3. Servidor de WebSockets (OSC/VMC Bridge)
+      import('ws').then(({ WebSocketServer }) => {
+        import('node-osc').then(({ Server: OSCServer }) => {
+          const wss = new WebSocketServer({ noServer: true });
+          
+          server.httpServer.on('upgrade', (request: any, socket: any, head: any) => {
+            if (request.url === '/vmc') {
+              wss.handleUpgrade(request, socket, head, (ws: any) => {
+                wss.emit('connection', ws, request);
+              });
+            }
+          });
+
+          let oscServer: any = null;
+
+          wss.on('connection', (ws: any) => {
+            ws.on('message', (message: string) => {
+              const data = JSON.parse(message);
+              
+              if (data.type === 'start') {
+                const port = data.port || 39539;
+                if (oscServer) oscServer.close();
+                
+                try {
+                  oscServer = new OSCServer(port, '0.0.0.0', () => {
+                    ws.send(JSON.stringify({ type: 'status', status: 'listening', port }));
+                    console.log(`[VMC] Escuchando OSC en puerto ${port}`);
+                  });
+                  
+                  oscServer.on('message', (msg: any) => {
+                    // msg es un array: [address, ...args]
+                    // Filtramos para reducir ruido de la consola si es necesario, pero lo enviamos al cliente
+                    ws.send(JSON.stringify({ type: 'osc', message: msg }));
+                  });
+                } catch (e: any) {
+                  ws.send(JSON.stringify({ type: 'error', message: e.message }));
+                }
+                
+              } else if (data.type === 'stop') {
+                if (oscServer) {
+                  oscServer.close();
+                  oscServer = null;
+                }
+                ws.send(JSON.stringify({ type: 'status', status: 'stopped' }));
+                console.log(`[VMC] Servidor OSC detenido`);
+              }
+            });
+            
+            ws.on('close', () => {
+              if (oscServer) {
+                oscServer.close();
+                oscServer = null;
+              }
+            });
+          });
+        });
+      });
     }
   };
 }

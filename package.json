@@ -1,7 +1,7 @@
 {
   "name": "animador-vrm",
   "private": true,
-  "version": "a-0.0.2",
+  "version": "a-0.0.3",
   "description": "Estudio de animación para modelos VRM: línea de tiempo, preajustes, seguimiento por video, efectos y exportación hasta 4K",
   "type": "module",
   "scripts": {
@@ -15,10 +15,13 @@
     "@pixiv/three-vrm-animation": "^3.1.0",
     "@types/multiparty": "^4.2.1",
     "@types/serve-static": "^2.2.0",
+    "@types/ws": "^8.18.2",
     "mp4-muxer": "^5.1.2",
     "multiparty": "^4.3.1",
+    "node-osc": "^11.7.1",
     "serve-static": "^2.2.1",
-    "three": "^0.169.0"
+    "three": "^0.169.0",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

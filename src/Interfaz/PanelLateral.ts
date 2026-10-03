@@ -130,7 +130,60 @@ export class PanelLateral {
     this.ConstruirSeccionEscena();
     this.ConstruirSeccionEfectos();
     this.ConstruirSeccionAudio();
-    // this.ConstruirSeccionSeguimiento(); // Deshabilitado temporalmente por petición del usuario
+    this.ConstruirSeccionVMC();
+    // this.ConstruirSeccionSeguimiento(); // Deshabilitado temporalmente
+  }
+
+  // -------- Receptor VMC (Virtual Motion Capture) --------
+  private ConstruirSeccionVMC(): void {
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Receptor VMC (OSC)', false);
+    const Ctx = this.Contexto;
+
+    this.Nota(Cuerpo, 'Recibe datos de animación en tiempo real desde aplicaciones como VSeeFace, Waidayo o mocopi mediante el protocolo VMC sobre la red local.');
+
+    const Fila = document.createElement('div');
+    Fila.className = 'FilaControles';
+
+    const EtiquetaEstado = document.createElement('span');
+    EtiquetaEstado.textContent = 'Estado: Desconectado';
+    EtiquetaEstado.style.fontSize = '0.9em';
+    EtiquetaEstado.style.marginTop = '8px';
+    EtiquetaEstado.style.display = 'block';
+
+    const BotonConectar = this.Boton('Iniciar Servidor', () => {
+      if (Ctx.VMC.Estado === 'Desconectado') {
+        Ctx.VMC.Iniciar(39539, (E: string) => {
+          EtiquetaEstado.textContent = `Estado: ${E}`;
+          BotonConectar.textContent = E === 'Escuchando' || E === 'Conectando' ? 'Detener Servidor' : 'Iniciar Servidor';
+        });
+      } else {
+        Ctx.VMC.Detener();
+      }
+    }, 'BotonPrimario');
+
+    const BotonGrabar = this.Boton('⏺ Grabar a Timeline', () => {
+      if (!Ctx.Modelos.Vrm) {
+        Ctx.NotificarEstado('Carga un modelo primero.');
+        return;
+      }
+      if (Ctx.VMC.Estado !== 'Escuchando') {
+        Ctx.NotificarEstado('Debes iniciar el servidor VMC primero.');
+        return;
+      }
+
+      if (!Ctx.VMC.Grabando) {
+        Ctx.VMC.IniciarGrabacion();
+        BotonGrabar.textContent = '⏹ Detener Grabación';
+        BotonGrabar.style.background = '#ff4d4d';
+      } else {
+        Ctx.VMC.DetenerGrabacion();
+        BotonGrabar.textContent = '⏺ Grabar a Timeline';
+        BotonGrabar.style.background = '';
+      }
+    });
+
+    Fila.append(BotonConectar, BotonGrabar);
+    Cuerpo.append(Fila, EtiquetaEstado);
   }
 
   // -------- Modelo VRM (Etapa 1) --------

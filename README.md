@@ -1,9 +1,10 @@
-# Animador VRM (Experimental v a-0.0.2)
+# Animador VRM (Experimental v a-0.0.3)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (v a-0.0.2)
+## Características (v a-0.0.3)
 
+- **Receptor VMC (Nuevo):** Compatibilidad con el protocolo *Virtual Motion Capture (OSC)*. Recibe datos de rastreo en tiempo real desde apps de VTubing (VSeeFace, Waidayo, mocopi) y grábalos directamente en la línea de tiempo.
 - **Layout Profesional de 3 Paneles:** Flujo de trabajo ordenado con biblioteca de assets a la izquierda, visor 3D central y panel de propiedades e inspector a la derecha.
 - **Posado 3D Directo en Visor:** Posibilidad de seleccionar huesos directamente haciendo clic sobre el modelo 3D y utilizar un Gizmo visual (TransformControls) para aplicar rotaciones y traslaciones.
   - `E` - Rotar hueso

@@ -35,18 +35,24 @@ const Animacion = new GestorAnimacion(Modelos);
 const Audio = new GestorAudio();
 const Efectos = new GestorEfectos(Escena.Escena);
 const Tracking = new GestorTracking();
+import { GestorVMC } from './Nucleo/GestorVMC';
+
+// ...
 const Exportador = new GestorExportacion();
 
 const IndicadorEstado = document.getElementById('IndicadorEstado')!;
 const IndicadorFps = document.getElementById('IndicadorFps')!;
 const IndicadorTiempo = document.getElementById('IndicadorTiempo')!;
 
-const Contexto: ContextoAplicacion = {
+const Contexto: any = { // Temporalmente any para inyectar VMC y sortear tipos cíclicos si los hay
   Escena, Modelos, Animacion, Audio, Efectos, Tracking, Exportador,
-  NotificarEstado: (M) => { IndicadorEstado.textContent = M; },
+  VMC: null,
+  NotificarEstado: (M: string) => { IndicadorEstado.textContent = M; },
   RefrescarLineaTiempo: () => Linea.Dibujar(),
   RefrescarPanel: () => Panel.RefrescarDinamico()
 };
+
+Contexto.VMC = new GestorVMC(Contexto);
 
 const Panel = new PanelLateral(
   document.getElementById('PanelIzquierdo')!,

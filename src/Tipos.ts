@@ -7,7 +7,8 @@
 export type TipoObjetivoPista = 'HuesoRotacion' | 'HuesoPosicion' | 'Expresion';
 
 /** Origen de una pista; define el color y la prioridad de aplicación. */
-export type GrupoPista = 'Manual' | 'Preajuste' | 'Importado' | 'SeguimientoCuerpo' | 'SeguimientoRostro';
+export type GrupoPista = 'Manual' | 'Preajuste' | 'Importado' | 'SeguimientoCuerpo' | 'SeguimientoRostro' | 'GrabacionVMC';
+
 
 /** Clave (fotograma clave) individual dentro de una pista. */
 export interface ClaveAnimacion {
@@ -71,6 +72,7 @@ export const RESOLUCIONES_EXPORTACION = [
 export const PRIORIDAD_GRUPOS: GrupoPista[] = [
   'SeguimientoCuerpo',
   'SeguimientoRostro',
+  'GrabacionVMC',
   'Importado',
   'Preajuste',
   'Manual'
@@ -82,5 +84,6 @@ export const COLORES_GRUPO: Record<GrupoPista, string> = {
   Preajuste: '#8be28b',
   Importado: '#c9a7ff',
   SeguimientoCuerpo: '#ffb35c',
-  SeguimientoRostro: '#ff7fb1'
+  SeguimientoRostro: '#ff7fb1',
+  GrabacionVMC: '#ff4d4d'
 };
