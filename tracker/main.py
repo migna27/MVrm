@@ -1,6 +1,9 @@
 import argparse
 import json
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from utils.math_utils import smooth_tracks
 
 def export_to_vrm_format(tracks_smoothed, duration, output_json):
