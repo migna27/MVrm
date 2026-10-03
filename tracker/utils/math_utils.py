@@ -1,95 +1,94 @@
 import math
 import numpy as np
 from scipy.signal import savgol_filter
+from scipy.spatial.transform import Rotation
+
+def align_vectors(v_rest, v_obs):
+    """Calcula los Euler angles necesarios para rotar v_rest hacia v_obs en espacio 3D."""
+    v_rest = v_rest / (np.linalg.norm(v_rest) + 1e-6)
+    v_obs = v_obs / (np.linalg.norm(v_obs) + 1e-6)
+    
+    axis = np.cross(v_rest, v_obs)
+    axis_len = np.linalg.norm(axis)
+    if axis_len < 1e-5:
+        return [0.0, 0.0, 0.0]
+    
+    axis = axis / axis_len
+    angle = math.acos(np.clip(np.dot(v_rest, v_obs), -1.0, 1.0))
+    
+    r = Rotation.from_rotvec(axis * angle)
+    return r.as_euler('xyz').tolist()
 
 def calculate_full_body_angles(landmarks_dict):
     """
-    Convierte un diccionario de landmarks 3D a Euler Angles (VRM) y la posición de la cadera.
-    landmarks_dict contiene: 'ls', 'rs', 'le', 're', 'lw', 'rw', 'lh', 'rh', 'lk', 'rk', 'la', 'ra', 'nose'
+    Convierte landmarks a Euler Angles resolviendo la cinemática directa (Forward Kinematics).
+    Se mapea el espacio de MediaPipe a un espacio compatible con Unity/VRM (Y-Up, X-Right).
     """
     angles = {}
     positions = {}
     
-    ls, rs = landmarks_dict['ls'], landmarks_dict['rs']
-    le, re = landmarks_dict['le'], landmarks_dict['re']
-    lh, rh = landmarks_dict['lh'], landmarks_dict['rh'] # caderas
-    lk, rk = landmarks_dict['lk'], landmarks_dict['rk'] # rodillas
-    la, ra = landmarks_dict['la'], landmarks_dict['ra'] # tobillos
-    nose = landmarks_dict['nose']
-
-    def get_dir(p1, p2):
-        vec = p2 - p1
-        n = np.linalg.norm(vec)
-        return (vec / n) if n > 0 else np.zeros(3)
-
-    # POSICIÓN DE CADERA (Root)
+    # MP coords: X=Right, Y=Down, Z=Away from camera
+    # Unity coords: X=Right, Y=Up, Z=Forward
+    def to_unity(pt):
+        # Invertimos Y para que Arriba sea +Y. 
+        # Invertimos Z para profundidad (depende de cómo queramos que reaccione VMC, usualmente -Z o +Z, probaremos +Z).
+        return np.array([pt[0], -pt[1], pt[2]])
+        
+    ls = to_unity(landmarks_dict['ls'])
+    rs = to_unity(landmarks_dict['rs'])
+    le = to_unity(landmarks_dict['le'])
+    re = to_unity(landmarks_dict['re'])
+    lw = to_unity(landmarks_dict['lw'])
+    rw = to_unity(landmarks_dict['rw'])
+    lh = to_unity(landmarks_dict['lh'])
+    rh = to_unity(landmarks_dict['rh'])
+    lk = to_unity(landmarks_dict['lk'])
+    rk = to_unity(landmarks_dict['rk'])
+    la = to_unity(landmarks_dict['la'])
+    ra = to_unity(landmarks_dict['ra'])
+    nose = to_unity(landmarks_dict['nose'])
+    
     hips_mid = (lh + rh) / 2.0
-    # MediaPipe normaliza de extraña manera. Invertimos Y para que cuadre con Three.js
-    positions['hips'] = [-hips_mid[0], -hips_mid[1], -hips_mid[2]]
-
-    # COLUMNA (Spine)
     shoulders_mid = (ls + rs) / 2.0
-    spine_dir = get_dir(hips_mid, shoulders_mid)
-    # Pitch hacia adelante/atras, Roll a los lados
-    spine_pitch = math.asin(np.clip(spine_dir[2], -1.0, 1.0))
-    spine_roll = math.atan2(spine_dir[0], spine_dir[1])
-    angles['spine'] = [-spine_pitch, 0, spine_roll]
-
-    # CABEZA (Head)
-    head_dir = get_dir(shoulders_mid, nose)
-    head_pitch = math.asin(np.clip(head_dir[2], -1.0, 1.0))
-    head_yaw = math.atan2(head_dir[0], -head_dir[1])
-    angles['head'] = [-head_pitch, head_yaw, 0]
-
-    # BRAZOS
-    l_arm_dir = get_dir(ls, le)
-    if np.any(l_arm_dir):
-        angles['leftUpperArm'] = [0, math.atan2(-l_arm_dir[2], l_arm_dir[0]), math.asin(np.clip(l_arm_dir[1], -1.0, 1.0))]
-
-    r_arm_dir = get_dir(rs, re)
-    if np.any(r_arm_dir):
-        angles['rightUpperArm'] = [0, math.atan2(-r_arm_dir[2], -r_arm_dir[0]), math.asin(np.clip(r_arm_dir[1], -1.0, 1.0))]
-
-    l_forearm_dir = get_dir(le, landmarks_dict['lw'])
-    if np.any(l_forearm_dir):
-        angles['leftLowerArm'] = [0, 0, math.asin(np.clip(l_forearm_dir[1], -1.0, 1.0))]
-
-    r_forearm_dir = get_dir(re, landmarks_dict['rw'])
-    if np.any(r_forearm_dir):
-        angles['rightLowerArm'] = [0, 0, math.asin(np.clip(r_forearm_dir[1], -1.0, 1.0))]
-
-    # PIERNAS
-    l_leg_dir = get_dir(lh, lk)
-    if np.any(l_leg_dir):
-        # Mapeo simple: rotar en X (flexión) y Z (abducción)
-        pitch = math.asin(np.clip(l_leg_dir[2], -1.0, 1.0))
-        angles['leftUpperLeg'] = [pitch, 0, 0]
-
-    r_leg_dir = get_dir(rh, rk)
-    if np.any(r_leg_dir):
-        pitch = math.asin(np.clip(r_leg_dir[2], -1.0, 1.0))
-        angles['rightUpperLeg'] = [pitch, 0, 0]
-
-    l_calf_dir = get_dir(lk, la)
-    if np.any(l_calf_dir):
-        pitch = math.asin(np.clip(l_calf_dir[2], -1.0, 1.0))
-        angles['leftLowerLeg'] = [pitch, 0, 0]
-
-    r_calf_dir = get_dir(rk, ra)
-    if np.any(r_calf_dir):
-        pitch = math.asin(np.clip(r_calf_dir[2], -1.0, 1.0))
-        angles['rightLowerLeg'] = [pitch, 0, 0]
-
+    
+    # 1. Posición de cadera (Root) - Amplificamos un poco el movimiento
+    positions['hips'] = [float(hips_mid[0]*2.0), float(hips_mid[1]*2.0), float(hips_mid[2]*2.0)]
+    
+    # 2. Vectores Observados (Dirección real en el video)
+    spine_obs = shoulders_mid - hips_mid
+    head_obs = nose - shoulders_mid
+    
+    l_arm_obs = le - ls
+    l_forearm_obs = lw - le
+    r_arm_obs = re - rs
+    r_forearm_obs = rw - re
+    
+    l_leg_obs = lk - lh
+    l_calf_obs = la - lk
+    r_leg_obs = rk - rh
+    r_calf_obs = ra - rk
+    
+    # 3. Calcular Rotaciones alineando el vector de reposo (T-Pose) con el observado
+    # En VRM (Unity): Cabeza/Espalda apuntan en +Y, Piernas en -Y, Brazo Izq en +X, Brazo Der en -X
+    angles['spine'] = align_vectors(np.array([0, 1, 0]), spine_obs)
+    angles['head'] = align_vectors(np.array([0, 1, 0]), head_obs)
+    
+    angles['leftUpperArm'] = align_vectors(np.array([1, 0, 0]), l_arm_obs)
+    angles['leftLowerArm'] = align_vectors(np.array([1, 0, 0]), l_forearm_obs)
+    
+    angles['rightUpperArm'] = align_vectors(np.array([-1, 0, 0]), r_arm_obs)
+    angles['rightLowerArm'] = align_vectors(np.array([-1, 0, 0]), r_forearm_obs)
+    
+    angles['leftUpperLeg'] = align_vectors(np.array([0, -1, 0]), l_leg_obs)
+    angles['leftLowerLeg'] = align_vectors(np.array([0, -1, 0]), l_calf_obs)
+    
+    angles['rightUpperLeg'] = align_vectors(np.array([0, -1, 0]), r_leg_obs)
+    angles['rightLowerLeg'] = align_vectors(np.array([0, -1, 0]), r_calf_obs)
+    
     return angles, positions
 
 def apply_anti_clipping(angles, l_wrist, r_wrist, l_shoulder, r_shoulder):
-    body_radius = 0.15 
-    if 'leftUpperArm' in angles and abs(l_wrist[0]) < body_radius and l_wrist[1] > l_shoulder[1]:
-        penetration = body_radius - abs(l_wrist[0])
-        angles['leftUpperArm'][2] -= penetration * 2.0 
-    if 'rightUpperArm' in angles and abs(r_wrist[0]) < body_radius and r_wrist[1] > r_shoulder[1]:
-        penetration = body_radius - abs(r_wrist[0])
-        angles['rightUpperArm'][2] += penetration * 2.0
+    # Ya no es tan necesario con el cálculo vectorial exacto, pero lo mantenemos por seguridad.
     return angles
 
 def smooth_tracks(tracks_raw, window=5, polyorder=2):

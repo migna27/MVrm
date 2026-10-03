@@ -108,12 +108,7 @@ export class GestorVMC {
       
       const node = Vrm.humanoid?.getNormalizedBoneNode(name);
       if (node) {
-        // En VMC, la rotación a veces requiere adaptaciones de espacio, pero probaremos directo 
-        // ya que asume coordenadas de Unity (x derecha, y arriba, z adelante)
-        // Unity a Three: Unity Left-Handed (x, y, z) -> Three Right-Handed (-x, y, z) para posiciones.
-        // Para quaterniones (qx, qy, qz, qw) -> (-qx, qy, qz, -qw) o similar.
-        // Pero @pixiv/three-vrm ya lidia con los mapeos si lo forzamos.
-        // Usemos la convención estandar empírica:
+        // Asume quaterniones de Unity, GestorVMC los convierte a ThreeJS (-x, -y, z, w)
         const quat = new THREE.Quaternion(-qx, -qy, qz, qw);
         node.quaternion.copy(quat);
 
@@ -123,6 +118,34 @@ export class GestorVMC {
         }
       }
     } 
+    else if (Direccion === '/VMC/Ext/Root/Pos') {
+      // msg = [direccion, nombre, px, py, pz, qx, qy, qz, qw]
+      const px = msg[2], py = msg[3], pz = msg[4];
+      
+      const node = Vrm.humanoid?.getNormalizedBoneNode('hips');
+      if (node) {
+        // ThreeJS es Right-Handed: invertimos X (Unity -> Three) o Z (según setup)
+        // En GestorAnimacion usamos Valores directos de position.
+        // Aquí ajustamos empíricamente la escala y ejes de Unity a Three.
+        node.position.set(-px, py, -pz);
+        
+        if (this.Grabando) {
+          // El ID de huesoposicion es distinto en grabación
+          const IdPos = `VMC_Pos_hips`;
+          if (!this.PistasGrabacion[IdPos]) {
+            this.PistasGrabacion[IdPos] = {
+              Id: GenerarId(), Nombre: `VMC Root hips`, Tipo: 'HuesoPosicion',
+              Objetivo: 'hips', Grupo: 'GrabacionVMC', Claves: []
+            };
+          }
+          const Pista = this.PistasGrabacion[IdPos];
+          const TiempoAbs = this.Contexto.Animacion.TiempoActual;
+          if (Pista.Claves.length === 0 || (TiempoAbs - Pista.Claves[Pista.Claves.length - 1].Tiempo > 0.03)) {
+            Pista.Claves.push({ Id: GenerarId(), Tiempo: TiempoAbs, Valor: [node.position.x, node.position.y, node.position.z] });
+          }
+        }
+      }
+    }
     else if (Direccion === '/VMC/Ext/Blend/Val') {
       const BlendName = msg[1] as string;
       const Value = msg[2] as number;
