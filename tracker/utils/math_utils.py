@@ -59,3 +59,56 @@ def smooth_tracks(tracks, window=7, poly=2):
         for i in range(len(keys)):
             keys[i]['Valor'] = [float(x_f[i]), float(y_f[i]), float(z_f[i])]
     return tracks
+
+def calculate_hand_angles(landmarks, is_right=False):
+    """
+    Calcula una pose simplificada de la mano.
+    Las landmarks de MediaPipe Hands son 21.
+    0: wrist, 1-4: thumb, 5-8: index, 9-12: middle, 13-16: ring, 17-20: pinky
+    """
+    import math
+    import numpy as np
+    
+    angles = {}
+    prefix = 'right' if is_right else 'left'
+    
+    # Extraemos coords (x,y)
+    def pt(idx): return np.array([landmarks[idx].x, landmarks[idx].y])
+    
+    wrist = pt(0)
+    index_mcp = pt(5)
+    pinky_mcp = pt(17)
+    
+    # 1. Rotación general de la mano (leftHand / rightHand)
+    hand_dir = index_mcp - wrist
+    hand_dir = hand_dir / (np.linalg.norm(hand_dir) + 1e-6)
+    
+    roll = math.atan2(hand_dir[1], hand_dir[0])
+    if not is_right: roll -= math.pi
+    
+    angles[f"{prefix}Hand"] = [0, 0, roll * 0.5] 
+    
+    # 2. Curl de dedos (puño cerrado vs abierto)
+    fingers = [
+        ('Thumb', 1, 2, 3, 4),
+        ('Index', 5, 6, 7, 8),
+        ('Middle', 9, 10, 11, 12),
+        ('Ring', 13, 14, 15, 16),
+        ('Little', 17, 18, 19, 20)
+    ]
+    
+    for fname, mcp, pip, dip, tip in fingers:
+        d_mcp = np.linalg.norm(pt(mcp) - wrist)
+        d_tip = np.linalg.norm(pt(tip) - wrist)
+        
+        ratio = d_tip / (d_mcp + 1e-6)
+        
+        # Mapeo lineal simple: ratio 2.0 -> abierto (0 rad), ratio 1.0 -> cerrado (1.5 rad)
+        curl = np.clip((2.0 - ratio) * 1.5, 0.0, 1.5)
+        if fname == 'Thumb': curl *= 0.5 
+        
+        angles[f"{prefix}{fname}Proximal"] = [0, 0, curl]
+        angles[f"{prefix}{fname}Intermediate"] = [0, 0, curl]
+        angles[f"{prefix}{fname}Distal"] = [0, 0, curl]
+        
+    return angles

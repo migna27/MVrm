@@ -522,25 +522,22 @@ export class PanelLateral {
     const Cuerpo = this.Seccion(this.RaizIzq, 'Tracking por IA (Python)');
     const Ctx = this.Contexto;
 
-    this.Nota(Cuerpo, 'Utiliza tu cámara web para capturar movimiento en tiempo real. El procesamiento se realiza en el motor de Inteligencia Artificial interno (Python) para máximo rendimiento, y se envía al modelo mediante el protocolo VMC.');
+    this.Nota(Cuerpo, 'Utiliza tu cámara web o procesa un video pregrabado. El motor de Inteligencia Artificial (MediaPipe Holistic) rastreará cuerpo y manos.');
 
-    const Fila = document.createElement('div');
-    Fila.className = 'FilaControles';
+    // --- OPCIÓN A: CÁMARA EN VIVO ---
+    const FilaCamara = document.createElement('div');
+    FilaCamara.className = 'FilaControles';
+    FilaCamara.style.marginBottom = '15px';
 
     let EstadoCamara = false;
-    const BotonCamara = this.Boton('📷 Activar Cámara', async () => {
-      if (!Ctx.Modelos.Vrm) {
-        Ctx.NotificarEstado('Carga un modelo primero.');
-        return;
-      }
+    const BotonCamara = this.Boton('📷 Activar Cámara en vivo', async () => {
+      if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga un modelo primero.'); return; }
 
       if (!EstadoCamara) {
-        // Asegurar que VMC está encendido
         if (Ctx.VMC.Estado === 'Desconectado') {
           Ctx.NotificarEstado('Iniciando puente VMC interno...');
           Ctx.VMC.Iniciar(39539, () => {});
         }
-
         BotonCamara.textContent = 'Iniciando IA...';
         BotonCamara.disabled = true;
 
@@ -559,21 +556,86 @@ export class PanelLateral {
           BotonCamara.disabled = false;
         }
       } else {
-        // Detener
-        try {
-          await fetch('/api/tracker/stop', { method: 'POST' });
-        } catch (e) {}
+        try { await fetch('/api/tracker/stop', { method: 'POST' }); } catch (e) {}
         EstadoCamara = false;
-        BotonCamara.textContent = '📷 Activar Cámara';
+        BotonCamara.textContent = '📷 Activar Cámara en vivo';
         BotonCamara.style.background = '';
         Ctx.NotificarEstado('Cámara detenida.');
       }
     }, 'BotonPrimario');
+    
+    FilaCamara.append(BotonCamara);
+    Cuerpo.appendChild(FilaCamara);
 
-    Fila.append(BotonCamara);
-    Cuerpo.appendChild(Fila);
+    // --- OPCIÓN B: VIDEO PREGRABADO ---
+    const FilaVideo = document.createElement('div');
+    FilaVideo.className = 'FilaControles';
+    
+    let ArchivoVideoTemp: string | null = null;
+    const EtiquetaVideo = this.EtiquetaArchivo(Cuerpo);
 
-    this.Nota(Cuerpo, 'Para grabar la animación generada por la cámara, ve a la sección "Receptor VMC" arriba y usa el botón "Grabar a Timeline".');
+    const BotonCargar = this.Boton('Cargar Video...', async () => {
+      const Archivo = await SeleccionarArchivo('video/*');
+      if (!Archivo) return;
+      Ctx.NotificarEstado('Subiendo video al servidor local...');
+      
+      const form = new FormData();
+      form.append('file', Archivo);
+      form.append('category', 'videos');
+      
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.success) {
+          ArchivoVideoTemp = data.path;
+          EtiquetaVideo.textContent = `Video: ${Archivo.name}`;
+          Ctx.NotificarEstado('Video listo para procesar.');
+        }
+      } catch (e) {
+        Ctx.NotificarEstado('Error al subir video.');
+      }
+    });
+
+    const BotonProcesar = this.Boton('▶ Procesar Video', async () => {
+      if (!ArchivoVideoTemp) { Ctx.NotificarEstado('Carga primero un video.'); return; }
+      if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo VRM.'); return; }
+      
+      BotonProcesar.disabled = true;
+      BotonProcesar.textContent = 'Procesando IA (Ver consola)...';
+      Ctx.NotificarEstado('Analizando video con MediaPipe Holistic...');
+      
+      try {
+        const res = await fetch('/api/tracker/process-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoPath: ArchivoVideoTemp })
+        });
+        const data = await res.json();
+        
+        if (data.success && data.jsonUrl) {
+          const resJson = await fetch(data.jsonUrl);
+          const datosAnim = await resJson.json();
+          Ctx.Animacion.EliminarPistasPorGrupo('SeguimientoCuerpo');
+          Ctx.Animacion.AgregarPistas(datosAnim.Pistas);
+          const UltimoTiempo = Math.max(0, ...datosAnim.Pistas.flatMap((P: any) => P.Claves.map((C: any) => C.Tiempo)));
+          if (UltimoTiempo > Ctx.Animacion.Duracion) Ctx.Animacion.Duracion = Math.ceil(UltimoTiempo);
+          Ctx.NotificarEstado(`Video procesado con éxito: ${datosAnim.Pistas.length} pistas generadas.`);
+          BotonProcesar.textContent = '▶ Procesar Video';
+        } else {
+          Ctx.NotificarEstado('Falló el procesamiento en Python.');
+        }
+      } catch (e) {
+        Ctx.NotificarEstado('Error de conexión con el backend.');
+      } finally {
+        BotonProcesar.disabled = false;
+        BotonProcesar.textContent = '▶ Procesar Video';
+      }
+    }, 'BotonPrimario');
+
+    FilaVideo.append(BotonCargar, BotonProcesar);
+    Cuerpo.appendChild(FilaVideo);
+
+    this.Nota(Cuerpo, 'Cámara en vivo graba en la línea de tiempo usando el botón "Grabar a Timeline" de arriba. Procesar Video añade las pistas automáticamente al cargarlo.');
   }
 
   // -------- Escena y fondo (Etapa 4) --------

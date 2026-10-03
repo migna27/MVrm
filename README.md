@@ -1,8 +1,11 @@
-# Animador VRM (Experimental v a-0.0.3)
+# Animador VRM (Experimental v a-0.0.5)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (v a-0.0.3)
+## Características (v a-0.0.5)
+
+- **IA Holistic (Cuerpo y Manos):** Integración de MediaPipe Holistic desde Python. El modelo ahora es capaz de imitar no solo la postura del torso y brazos, sino la rotación de las muñecas y abrir/cerrar los puños.
+- **Rastreo Mixto (Cámara o Archivo):** ¿Quieres usar tu cámara en vivo? Usa el botón nativo y transmite por OSC. ¿Tienes un video `.mp4`? Súbelo, transpórtalo a JSON mediante el motor Python, e incrústalo como un clip en tu línea de tiempo instantáneamente.
 
 - **Receptor VMC (Nuevo):** Compatibilidad con el protocolo *Virtual Motion Capture (OSC)*. Recibe datos de rastreo en tiempo real desde apps de VTubing (VSeeFace, Waidayo, mocopi) y grábalos directamente en la línea de tiempo.
 - **Layout Profesional de 3 Paneles:** Flujo de trabajo ordenado con biblioteca de assets a la izquierda, visor 3D central y panel de propiedades e inspector a la derecha.

@@ -1,7 +1,7 @@
 {
   "name": "animador-vrm",
   "private": true,
-  "version": "a-0.0.3",
+  "version": "a-0.0.5",
   "description": "Estudio de animación para modelos VRM: línea de tiempo, preajustes, seguimiento por video, efectos y exportación hasta 4K",
   "type": "module",
   "scripts": {

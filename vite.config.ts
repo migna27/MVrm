@@ -55,6 +55,44 @@ function localAssetsPlugin() {
           res.end(JSON.stringify({ success: true }));
           return;
         }
+
+        // Procesar un video completo a JSON
+        if (req.url === '/api/tracker/process-video' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk: any) => body += chunk.toString());
+          req.on('end', () => {
+            const data = JSON.parse(body);
+            const inputPath = path.join(process.cwd(), data.videoPath);
+            const outName = `track_${Date.now()}.json`;
+            const outDir = path.join(process.cwd(), 'user', 'animations');
+            if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+            const outPath = path.join(outDir, outName);
+
+            const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
+              ? './tracker/python_portable/python.exe' : 'python';
+
+            console.log(`[API] Procesando video: ${inputPath}`);
+            const proc = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', 'mediapipe', '--input', inputPath, '--output', outPath], { cwd: process.cwd() });
+            
+            proc.stdout.on('data', (d) => console.log(`[PyVideo]: ${d.toString()}`));
+            proc.stderr.on('data', (d) => {
+               const msg = d.toString();
+               if (!msg.includes('Created TensorFlow Lite XNNPACK delegate')) console.error(`[PyVideo ERR]: ${msg}`);
+            });
+            
+            proc.on('close', (code) => {
+              if (code === 0 && fs.existsSync(outPath)) {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, jsonUrl: `/user/animations/${outName}` }));
+              } else {
+                res.statusCode = 500;
+                res.end(JSON.stringify({ success: false, error: 'Error procesando video' }));
+              }
+            });
+          });
+          return;
+        }
+
         if (req.url === '/api/library' && req.method === 'GET') {
           const getFiles = (dir: string) => {
             const fullPath = path.join(process.cwd(), dir);

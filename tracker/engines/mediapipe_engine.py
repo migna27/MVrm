@@ -5,7 +5,7 @@ import time
 from utils.math_utils import calculate_euler_angles_from_landmarks, apply_anti_clipping
 
 def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=None):
-    mp_pose = mp.solutions.pose
+    mp_holistic = mp.solutions.holistic
     mp_drawing = mp.solutions.drawing_utils
     
     source = int(video_path) if live and video_path.isdigit() else video_path
@@ -13,7 +13,6 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
     
     import platform
     if live and isinstance(source, int) and platform.system() == 'Windows':
-        # DirectShow abre la cámara al instante en Windows (evita demoras o bloqueos de Media Foundation)
         cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
     else:
         cap = cv2.VideoCapture(source)
@@ -30,7 +29,7 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
     
     print("[INFO] Iniciando captura. Presiona ESC en la ventana de preview para salir.")
 
-    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5, model_complexity=1 if live else 2) as pose:
+    with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5, model_complexity=1 if live else 2) as holistic:
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
@@ -43,16 +42,21 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                     
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image.flags.writeable = False
-                results = pose.process(image)
+                results = holistic.process(image)
                 
                 # Para el preview
                 image.flags.writeable = True
                 image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                 
                 if results.pose_landmarks:
-                    # Dibujar landmarks 2D en el preview
-                    mp_drawing.draw_landmarks(image_bgr, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+                    mp_drawing.draw_landmarks(image_bgr, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+                if results.left_hand_landmarks:
+                    mp_drawing.draw_landmarks(image_bgr, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+                if results.right_hand_landmarks:
+                    mp_drawing.draw_landmarks(image_bgr, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
+                angles = {}
+                # Postura (Cuerpo)
                 if results.pose_world_landmarks:
                     lms = results.pose_world_landmarks.landmark
                     ls = np.array([lms[11].x, lms[11].y, lms[11].z])
@@ -65,6 +69,16 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                     angles = calculate_euler_angles_from_landmarks(ls, rs, le, re, lw, rw)
                     angles = apply_anti_clipping(angles, lw, rw, ls, rs)
                     
+                # Manos
+                from utils.math_utils import calculate_hand_angles
+                if results.left_hand_landmarks:
+                    l_hand_angles = calculate_hand_angles(results.left_hand_landmarks.landmark, is_right=False)
+                    angles.update(l_hand_angles)
+                if results.right_hand_landmarks:
+                    r_hand_angles = calculate_hand_angles(results.right_hand_landmarks.landmark, is_right=True)
+                    angles.update(r_hand_angles)
+                
+                if angles:
                     if live and osc_client:
                         from scipy.spatial.transform import Rotation
                         for bone, rot in angles.items():
