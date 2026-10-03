@@ -1,0 +1,195 @@
+/* ==========================================================================
+   Estilos.css — Tema oscuro del Animador VRM
+   ========================================================================== */
+
+:root {
+  --ColorFondo: #101218;
+  --ColorPanel: #171a21;
+  --ColorPanelClaro: #1f232d;
+  --ColorBorde: #2a2f3b;
+  --ColorTexto: #dfe4ee;
+  --ColorTextoTenue: #8b93a5;
+  --ColorAcento: #6cc8ff;
+  --ColorAcentoFuerte: #3ea8f0;
+  --ColorPeligro: #ff6c7a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ColorFondo);
+  color: var(--ColorTexto);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 13px;
+}
+
+#Aplicacion {
+  display: grid;
+  grid-template-rows: 48px 1fr 236px;
+  height: 100vh;
+}
+
+/* ---------- Barra superior ---------- */
+#BarraSuperior {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  background: var(--ColorPanel);
+  border-bottom: 1px solid var(--ColorBorde);
+}
+
+#IdentidadApp { display: flex; align-items: center; gap: 10px; }
+#IdentidadApp h1 { font-size: 15px; margin: 0; font-weight: 600; letter-spacing: 0.4px; }
+#LogoApp { color: var(--ColorAcento); font-size: 18px; }
+#EtiquetaEtapa { color: var(--ColorTextoTenue); font-size: 11px; }
+
+#AccionesSuperior { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Controles genéricos ---------- */
+button {
+  background: var(--ColorPanelClaro);
+  color: var(--ColorTexto);
+  border: 1px solid var(--ColorBorde);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+button:hover { background: #262c38; border-color: var(--ColorAcento); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.BotonPrimario { background: var(--ColorAcentoFuerte); border-color: var(--ColorAcentoFuerte); color: #fff; }
+button.BotonPrimario:hover { background: #2f96dd; }
+button.BotonPeligro { border-color: var(--ColorPeligro); color: var(--ColorPeligro); }
+
+select, input[type="number"], input[type="text"] {
+  background: var(--ColorPanelClaro);
+  color: var(--ColorTexto);
+  border: 1px solid var(--ColorBorde);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+input[type="range"] { accent-color: var(--ColorAcento); }
+input[type="color"] {
+  width: 40px; height: 26px; padding: 0;
+  border: 1px solid var(--ColorBorde); border-radius: 6px; background: none;
+}
+input[type="checkbox"] { accent-color: var(--ColorAcento); }
+
+.EtiquetaCompacta {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--ColorTextoTenue); font-size: 11px; white-space: nowrap;
+}
+
+.SeparadorVertical { width: 1px; height: 22px; background: var(--ColorBorde); }
+
+/* ---------- Zona central ---------- */
+#ZonaCentral {
+  display: grid;
+  grid-template-columns: 322px 1fr;
+  min-height: 0;
+}
+
+#PanelLateral {
+  overflow-y: auto;
+  background: var(--ColorPanel);
+  border-right: 1px solid var(--ColorBorde);
+  padding: 8px;
+}
+
+#PanelLateral details {
+  background: var(--ColorPanelClaro);
+  border: 1px solid var(--ColorBorde);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+#PanelLateral summary {
+  padding: 9px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  user-select: none;
+}
+#PanelLateral summary::before { content: '▸ '; color: var(--ColorAcento); }
+#PanelLateral details[open] summary::before { content: '▾ '; }
+#PanelLateral .CuerpoSeccion { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+.FilaControles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.FilaControles > label { flex: 1; min-width: 0; }
+
+.GrupoDeslizador { display: grid; grid-template-columns: 92px 1fr 44px; align-items: center; gap: 8px; }
+.GrupoDeslizador output { text-align: right; color: var(--ColorTextoTenue); font-variant-numeric: tabular-nums; }
+
+.TextoTenue { color: var(--ColorTextoTenue); font-size: 11px; line-height: 1.45; }
+.NombreArchivo { color: var(--ColorAcento); font-size: 11px; word-break: break-all; }
+
+.BarraProgreso {
+  height: 8px; border-radius: 4px; overflow: hidden;
+  background: var(--ColorFondo); border: 1px solid var(--ColorBorde);
+}
+.BarraProgreso > div {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--ColorAcentoFuerte), var(--ColorAcento));
+  transition: width 0.15s;
+}
+
+.RejillaBotones { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+/* ---------- Visor 3D ---------- */
+#ContenedorVisor { position: relative; min-width: 0; min-height: 0; }
+#Visor3D { position: absolute; inset: 0; }
+#Visor3D canvas { display: block; }
+
+#SuperposicionVisor {
+  position: absolute; left: 10px; top: 8px; right: 10px;
+  display: flex; justify-content: space-between; gap: 10px;
+  pointer-events: none;
+  font-size: 11px; color: var(--ColorTextoTenue);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+#ZonaSoltar {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(16, 18, 24, 0.75);
+  border: 2px dashed var(--ColorAcento);
+  border-radius: 10px;
+  font-size: 16px; color: var(--ColorAcento);
+  pointer-events: none;
+  z-index: 5;
+}
+.Oculto { display: none !important; }
+
+/* ---------- Línea de tiempo ---------- */
+#ZonaLineaTiempo {
+  display: grid;
+  grid-template-rows: 38px 1fr;
+  background: var(--ColorPanel);
+  border-top: 1px solid var(--ColorBorde);
+}
+
+#ControlesTransporte {
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--ColorBorde);
+  overflow-x: auto;
+}
+#ControlesTransporte button { padding: 4px 10px; }
+#IndicadorTiempo { font-variant-numeric: tabular-nums; color: var(--ColorTexto); min-width: 130px; }
+#EntradaDuracion { width: 64px; }
+#DeslizadorZoom { width: 90px; }
+
+#ContenedorLineaTiempo { position: relative; min-height: 0; }
+#LienzoLineaTiempo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* Barra de desplazamiento discreta */
+#PanelLateral::-webkit-scrollbar, #ControlesTransporte::-webkit-scrollbar { width: 8px; height: 8px; }
+#PanelLateral::-webkit-scrollbar-thumb, #ControlesTransporte::-webkit-scrollbar-thumb {
+  background: var(--ColorBorde); border-radius: 4px;
+}

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Animador VRM — Estudio de Animación</title>
+</head>
+<body>
+  <div id="Aplicacion">
+    <!-- Barra superior: identidad y acciones de proyecto -->
+    <header id="BarraSuperior">
+      <div id="IdentidadApp">
+        <span id="LogoApp">◆</span>
+        <h1>Animador VRM</h1>
+        <span id="EtiquetaEtapa">Estudio de animación</span>
+      </div>
+      <div id="AccionesSuperior">
+        <button id="BotonNuevoProyecto" title="Nuevo proyecto">Nuevo</button>
+        <button id="BotonAbrirProyecto" title="Abrir proyecto (.animvrm.json)">Abrir</button>
+        <button id="BotonGuardarProyecto" title="Guardar proyecto">Guardar</button>
+        <span class="SeparadorVertical"></span>
+        <label class="EtiquetaCompacta">Calidad previa
+          <select id="SelectorCalidadPrevia">
+            <option value="0.5">Baja (rápida)</option>
+            <option value="0.75" selected>Media</option>
+            <option value="1">Alta</option>
+          </select>
+        </label>
+      </div>
+    </header>
+
+    <!-- Zona central: panel lateral + visor 3D -->
+    <div id="ZonaCentral">
+      <aside id="PanelLateral"></aside>
+      <main id="ContenedorVisor">
+        <div id="Visor3D"></div>
+        <div id="SuperposicionVisor">
+          <span id="IndicadorFps">— FPS</span>
+          <span id="IndicadorEstado">Arrastra un archivo .vrm al visor para comenzar</span>
+        </div>
+        <div id="ZonaSoltar" class="Oculto"><div>Suelta el archivo para cargarlo</div></div>
+      </main>
+    </div>
+
+    <!-- Zona inferior: transporte y línea de tiempo -->
+    <footer id="ZonaLineaTiempo">
+      <div id="ControlesTransporte">
+        <button id="BotonInicio" title="Ir al inicio">⏮</button>
+        <button id="BotonReproducir" title="Reproducir / Pausar (Espacio)">▶</button>
+        <button id="BotonDetener" title="Detener">⏹</button>
+        <label class="EtiquetaCompacta"><input type="checkbox" id="CasillaBucle" checked /> Bucle</label>
+        <span id="IndicadorTiempo">00:00.00 / 00:10.00</span>
+        <label class="EtiquetaCompacta">Duración (s) <input id="EntradaDuracion" type="number" min="1" max="600" step="0.5" value="10" /></label>
+        <button id="BotonInsertarPose" title="Insertar claves de la pose actual completa">⬦ Insertar pose</button>
+        <button id="BotonEliminarClave" title="Eliminar clave seleccionada (Supr)">🗑 Clave</button>
+        <span class="SeparadorVertical"></span>
+        <label class="EtiquetaCompacta">Zoom <input id="DeslizadorZoom" type="range" min="20" max="320" value="80" /></label>
+      </div>
+      <div id="ContenedorLineaTiempo">
+        <canvas id="LienzoLineaTiempo"></canvas>
+      </div>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/Principal.ts"></script>
+</body>
+</html>
