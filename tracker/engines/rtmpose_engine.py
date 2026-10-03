@@ -27,7 +27,15 @@ def run_rtmpose_tracking(source, live=False, osc_client=None, fps_target=24):
     session = ort.InferenceSession(onnx_path, providers=['CPUExecutionProvider'])
     input_name = session.get_inputs()[0].name
     
-    cap = cv2.VideoCapture(source)
+    if live and isinstance(source, str) and source.isdigit():
+        source = int(source)
+        
+    import platform
+    if live and isinstance(source, int) and platform.system() == 'Windows':
+        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+    else:
+        cap = cv2.VideoCapture(source)
+        
     if not cap.isOpened():
         print(f"[ERROR] No se pudo abrir {source}")
         return {}, 0
