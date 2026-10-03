@@ -128,9 +128,8 @@ export class GestorEscena {
     this.Compositor.addPass(this.PaseRGB);
 
     this.PaseRuido = new ShaderPass(FilmShader);
-    this.PaseRuido.uniforms['nIntensity'].value = 0.35;
-    this.PaseRuido.uniforms['sIntensity'].value = 0.0;
-    this.PaseRuido.uniforms['grayscale'].value = 0.0;
+    this.PaseRuido.uniforms['intensity'].value = 0.35;
+    this.PaseRuido.uniforms['grayscale'].value = false;
     this.Compositor.addPass(this.PaseRuido);
 
     this.PaseVigneta = new ShaderPass(VignetteShader);
@@ -151,7 +150,10 @@ export class GestorEscena {
     const RelacionPixeles = Limitar(window.devicePixelRatio || 1, 0.5, 2) * this.EscalaPrevia;
     this.Renderer.setPixelRatio(RelacionPixeles);
     this.Renderer.setSize(Ancho, Alto);
-    this.Compositor?.setSize(Ancho * RelacionPixeles, Alto * RelacionPixeles);
+    if (this.Compositor) {
+      this.Compositor.setPixelRatio(RelacionPixeles);
+      this.Compositor.setSize(Ancho, Alto);
+    }
     this.Camara.aspect = Ancho / Alto;
     this.Camara.updateProjectionMatrix();
   }
@@ -166,7 +168,10 @@ export class GestorEscena {
   public EstablecerTamanoExportacion(Ancho: number, Alto: number): void {
     this.Renderer.setPixelRatio(1);
     this.Renderer.setSize(Ancho, Alto, false);
-    this.Compositor?.setSize(Ancho, Alto);
+    if (this.Compositor) {
+      this.Compositor.setPixelRatio(1);
+      this.Compositor.setSize(Ancho, Alto);
+    }
     this.Camara.aspect = Ancho / Alto;
     this.Camara.updateProjectionMatrix();
   }
@@ -182,7 +187,11 @@ export class GestorEscena {
         this.PaseBloom.strength = this.BloomFuerza;
       }
       if (this.PaseRGB) this.PaseRGB.enabled = this.AberracionCromaticaActiva;
-      if (this.PaseRuido) this.PaseRuido.enabled = this.RuidoActivo;
+      if (this.PaseRuido) {
+        this.PaseRuido.enabled = this.RuidoActivo;
+        // Semilla por cuadro (determinista para que la exportación sea reproducible)
+        this.PaseRuido.uniforms['time'].value = (this.PaseRuido.uniforms['time'].value + 0.137) % 1000;
+      }
       if (this.PaseVigneta) this.PaseVigneta.enabled = this.VignetaActiva;
       
       this.Compositor.render();
@@ -200,7 +209,7 @@ export class GestorEscena {
   /** Activa o desactiva el ruido de película. */
   public EstablecerRuido(Activo: boolean, Intensidad?: number): void {
     this.RuidoActivo = Activo;
-    if (Intensidad !== undefined && this.PaseRuido) this.PaseRuido.uniforms['nIntensity'].value = Intensidad;
+    if (Intensidad !== undefined && this.PaseRuido) this.PaseRuido.uniforms['intensity'].value = Intensidad;
   }
 
   /** Activa o desactiva la viñeta oscura. */

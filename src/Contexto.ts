@@ -11,6 +11,7 @@ import type { GestorAudio } from './Nucleo/GestorAudio';
 import type { GestorEfectos } from './Nucleo/GestorEfectos';
 import type { GestorTracking } from './Nucleo/GestorTracking';
 import type { GestorExportacion } from './Nucleo/GestorExportacion';
+import type { GestorVMC } from './Nucleo/GestorVMC';
 
 export interface ContextoAplicacion {
   Escena: GestorEscena;
@@ -20,6 +21,7 @@ export interface ContextoAplicacion {
   Efectos: GestorEfectos;
   Tracking: GestorTracking;
   Exportador: GestorExportacion;
+  VMC: GestorVMC;
 
   /** Muestra un mensaje en la barra de estado del visor. */
   NotificarEstado(Mensaje: string): void;

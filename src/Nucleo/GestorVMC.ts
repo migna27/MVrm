@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { VRM, VRMHumanBoneName } from '@pixiv/three-vrm';
 import { PistaAnimacion, ClaveAnimacion } from '../Tipos';
 import { GenerarId } from '../Utilidades';
-import { ContextoApp } from '../Principal';
+import type { ContextoAplicacion } from '../Contexto';
 
 /**
  * GestorVMC: Conecta con el backend WebSocket que hace de puente OSC para 
@@ -17,7 +17,7 @@ export class GestorVMC {
   private PistasGrabacion: Record<string, PistaAnimacion> = {};
   private TiempoInicioGrabacion = 0;
 
-  constructor(private Contexto: typeof ContextoApp) {}
+  constructor(private Contexto: ContextoAplicacion) {}
 
   public Iniciar(Puerto: number = 39539, AlCambiarEstado: (estado: string) => void): void {
     if (this.ws) this.Detener();

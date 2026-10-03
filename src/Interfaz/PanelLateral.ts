@@ -542,7 +542,7 @@ export class PanelLateral {
           const ResUrl = await fetch(Ruta);
           const Archivo = new File([await ResUrl.blob()], Nombre);
           const Clip = await Ctx.Modelos.CargarAnimacionVrma(Archivo);
-          Ctx.Animacion.AgregarPistas(Ctx.Animacion.HornearClip(Clip, 24, Nombre));
+          Ctx.Animacion.AgregarPistas(Ctx.Animacion.HornearClip(Clip, 24, 'Importado'));
           Ctx.NotificarEstado(`Animación ${Nombre} insertada.`);
         } catch(E) { Ctx.NotificarEstado(`Error: ${(E as Error).message}`); }
       }, 'animations');
@@ -888,7 +888,6 @@ export class PanelLateral {
     );
     Cuerpo.appendChild(Fila);
 
-    this.Deslizador(Cuerpo, 'Luz principal', 0, 4, 0.05, 2.2, (V) => Ctx.Escena.EstablecerIntensidadLuz(V));
     this.Casilla(Cuerpo, 'Mostrar rejilla de piso', true, (V) => Ctx.Escena.AlternarRejilla(V));
   }
 
