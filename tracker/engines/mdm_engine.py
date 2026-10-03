@@ -24,13 +24,14 @@ def run_mdm_generation(prompt, live=False, osc_client=None, fps_target=24):
         
         # Estado base (Reposo)
         rot_state = {b: [0,0,0] for b in bones}
-        root_pos = [0,0,0]
+        BASE_HEIGHT = 0.85 # Altura promedio de cadera en avatares anime (absoluto)
+        root_pos = [0, BASE_HEIGHT, 0]
         root_rot = [0,0,0]
         
         # 1. SALTO
         if "salto" in prompt or "saltar" in prompt:
             if t < 0.2: # Preparacion (Agacharse)
-                root_pos[1] = -0.2 * (t/0.2)
+                root_pos[1] = BASE_HEIGHT - 0.2 * (t/0.2)
                 rot_state['leftUpperLeg'] = [(t/0.2)*0.5, 0, 0]
                 rot_state['rightUpperLeg'] = [(t/0.2)*0.5, 0, 0]
                 rot_state['leftLowerLeg'] = [-(t/0.2)*1.0, 0, 0]
@@ -38,7 +39,7 @@ def run_mdm_generation(prompt, live=False, osc_client=None, fps_target=24):
                 rot_state['spine'] = [(t/0.2)*0.3, 0, 0]
             elif t < 0.8: # En el aire
                 air_t = (t-0.2)/0.6
-                root_pos[1] = math.sin(air_t * math.pi) * 0.8 # Altura del salto (0.8m)
+                root_pos[1] = BASE_HEIGHT + math.sin(air_t * math.pi) * 0.8 # Altura del salto (0.8m)
                 rot_state['leftUpperLeg'] = [-0.2, 0, 0]
                 rot_state['rightUpperLeg'] = [-0.2, 0, 0]
                 rot_state['leftLowerLeg'] = [0, 0, 0]
@@ -47,7 +48,7 @@ def run_mdm_generation(prompt, live=False, osc_client=None, fps_target=24):
                 rot_state['rightUpperArm'] = [0, 0, 1.0]
             else: # Aterrizaje
                 land_t = (t-0.8)/0.2
-                root_pos[1] = -0.2 * (1.0 - land_t)
+                root_pos[1] = BASE_HEIGHT - 0.2 * (1.0 - land_t)
                 rot_state['leftUpperLeg'] = [(1.0 - land_t)*0.5, 0, 0]
                 rot_state['rightUpperLeg'] = [(1.0 - land_t)*0.5, 0, 0]
                 rot_state['leftLowerLeg'] = [-(1.0 - land_t)*1.0, 0, 0]
@@ -56,7 +57,7 @@ def run_mdm_generation(prompt, live=False, osc_client=None, fps_target=24):
         # 2. AGACHADO
         elif "agacha" in prompt or "cuclillas" in prompt:
             bend = math.sin(t * math.pi) # Curva suave de ida y vuelta
-            root_pos[1] = -0.4 * bend # Baja el centro de masa 40cm
+            root_pos[1] = BASE_HEIGHT - 0.4 * bend # Baja el centro de masa 40cm
             rot_state['leftUpperLeg'] = [bend * 1.0, 0, 0] # Flexiona cadera
             rot_state['rightUpperLeg'] = [bend * 1.0, 0, 0]
             rot_state['leftLowerLeg'] = [-bend * 2.0, 0, 0] # Flexiona rodilla
@@ -76,7 +77,7 @@ def run_mdm_generation(prompt, live=False, osc_client=None, fps_target=24):
         # 4. CORRER
         elif "corre" in prompt or "andando" in prompt or "camin" in prompt:
             cycle = (t * 4) * math.pi * 2 # 4 ciclos de carrera
-            root_pos[1] = abs(math.sin(cycle)) * 0.1 # Pequeño rebote
+            root_pos[1] = BASE_HEIGHT + abs(math.sin(cycle)) * 0.1 # Pequeño rebote
             rot_state['leftUpperLeg'] = [math.sin(cycle) * 0.8, 0, 0]
             rot_state['rightUpperLeg'] = [-math.sin(cycle) * 0.8, 0, 0]
             rot_state['leftLowerLeg'] = [abs(math.sin(cycle - math.pi/4)) * -1.2, 0, 0]

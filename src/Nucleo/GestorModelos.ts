@@ -194,21 +194,19 @@ export class GestorModelos {
     return Nodo ? new THREE.Euler().setFromQuaternion(Nodo.quaternion, 'XYZ') : new THREE.Euler();
   }
 
-  /** Aplica una posición local a un hueso de forma relativa a su pose de reposo (Delta). */
-  public EstablecerPosicionHueso(Nombre: string, Offset: THREE.Vector3): void {
+  /** Aplica una posición local a un hueso (absoluta). */
+  public EstablecerPosicionHueso(Nombre: string, Posicion: THREE.Vector3): void {
     const Nodo = this.ObtenerNodoHueso(Nombre);
-    const Reposo = this.PoseReposo.get(Nombre);
-    if (Nodo && Reposo) {
-      Nodo.position.copy(Reposo.Posicion).add(Offset);
+    if (Nodo) {
+      Nodo.position.copy(Posicion);
     }
   }
 
-  /** Lee el desplazamiento (offset) relativo a la pose de reposo. */
+  /** Lee la posición local absoluta de un hueso. */
   public ObtenerPosicionHueso(Nombre: string): THREE.Vector3 {
     const Nodo = this.ObtenerNodoHueso(Nombre);
-    const Reposo = this.PoseReposo.get(Nombre);
-    if (Nodo && Reposo) {
-      return Nodo.position.clone().sub(Reposo.Posicion);
+    if (Nodo) {
+      return Nodo.position.clone();
     }
     return new THREE.Vector3();
   }
