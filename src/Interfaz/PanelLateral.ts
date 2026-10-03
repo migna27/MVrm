@@ -131,7 +131,7 @@ export class PanelLateral {
     this.ConstruirSeccionEfectos();
     this.ConstruirSeccionAudio();
     this.ConstruirSeccionVMC();
-    // this.ConstruirSeccionSeguimiento(); // Deshabilitado temporalmente
+    this.ConstruirSeccionSeguimiento();
   }
 
   // -------- Receptor VMC (Virtual Motion Capture) --------
@@ -517,87 +517,63 @@ export class PanelLateral {
       // Ignorar fallo de fetch si el servidor Vite no tiene el plugin (producción)
     }
   }
-
-  // -------- Seguimiento por video (Etapa 3) --------
+  // -------- Seguimiento por IA (Etapa 3) --------
   private ConstruirSeccionSeguimiento(): void {
-    const Cuerpo = this.Seccion(this.RaizIzq, 'Seguimiento por video');
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Tracking por IA (Python)');
     const Ctx = this.Contexto;
 
-    Cuerpo.appendChild(this.Boton('Cargar video…', async () => {
-      const Archivo = await SeleccionarArchivo('video/*');
-      if (Archivo) {
-        this.ArchivoVideo = Archivo;
-        this.EtiquetaVideo.textContent = `Video: ${Archivo.name}`;
-      }
-    }));
-    this.EtiquetaVideo = this.EtiquetaArchivo(Cuerpo);
+    this.Nota(Cuerpo, 'Utiliza tu cámara web para capturar movimiento en tiempo real. El procesamiento se realiza en el motor de Inteligencia Artificial interno (Python) para máximo rendimiento, y se envía al modelo mediante el protocolo VMC.');
 
-    const CasillaCuerpo = this.Casilla(Cuerpo, 'Rastrear cuerpo', true, () => {});
-    const CasillaRostro = this.Casilla(Cuerpo, 'Rastrear rostro (expresiones + cabeza)', true, () => {});
-    const CasillaEspejo = this.Casilla(Cuerpo, 'Espejo (como cámara frontal)', false, () => {});
+    const Fila = document.createElement('div');
+    Fila.className = 'FilaControles';
 
-    const FilaFps = document.createElement('div');
-    FilaFps.className = 'FilaControles';
-    const EtiquetaFps = document.createElement('label');
-    EtiquetaFps.className = 'EtiquetaCompacta';
-    const SelectorFps = document.createElement('select');
-    for (const F of [10, 15, 24, 30]) {
-      const O = document.createElement('option');
-      O.value = String(F); O.textContent = `${F} fps`;
-      if (F === 15) O.selected = true;
-      SelectorFps.appendChild(O);
-    }
-    EtiquetaFps.append(document.createTextNode('Muestreo '), SelectorFps);
-    FilaFps.appendChild(EtiquetaFps);
-    Cuerpo.appendChild(FilaFps);
-
-    const { Entrada: DeslizadorSuavizado } = this.Deslizador(Cuerpo, 'Suavizado', 0, 0.9, 0.05, 0.35, () => {});
-
-    const BotonProcesar = this.Boton('▶ Procesar video', async () => {
-      if (!this.ArchivoVideo) { Ctx.NotificarEstado('Carga primero un video.'); return; }
-      if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo VRM.'); return; }
-      const Opciones: OpcionesSeguimiento = {
-        Cuerpo: CasillaCuerpo.checked,
-        Rostro: CasillaRostro.checked,
-        Espejo: CasillaEspejo.checked,
-        FpsMuestreo: parseInt(SelectorFps.value, 10),
-        Suavizado: parseFloat(DeslizadorSuavizado.value)
-      };
-      if (!Opciones.Cuerpo && !Opciones.Rostro) {
-        Ctx.NotificarEstado('Activa al menos una opción de seguimiento.');
+    let EstadoCamara = false;
+    const BotonCamara = this.Boton('📷 Activar Cámara', async () => {
+      if (!Ctx.Modelos.Vrm) {
+        Ctx.NotificarEstado('Carga un modelo primero.');
         return;
       }
-      BotonProcesar.disabled = true;
-      try {
-        const Pistas = await Ctx.Tracking.ProcesarVideo(
-          this.ArchivoVideo, Opciones, Ctx.Modelos,
-          (Fraccion, Mensaje) => {
-            this.BarraSeguimiento.style.width = `${Math.round(Fraccion * 100)}%`;
-            this.TextoSeguimiento.textContent = Mensaje;
+
+      if (!EstadoCamara) {
+        // Asegurar que VMC está encendido
+        if (Ctx.VMC.Estado === 'Desconectado') {
+          Ctx.NotificarEstado('Iniciando puente VMC interno...');
+          Ctx.VMC.Iniciar(39539, () => {});
+        }
+
+        BotonCamara.textContent = 'Iniciando IA...';
+        BotonCamara.disabled = true;
+
+        try {
+          const Res = await fetch('/api/tracker/start-live', { method: 'POST' });
+          if (Res.ok) {
+            EstadoCamara = true;
+            BotonCamara.textContent = '⏹ Detener Cámara';
+            BotonCamara.style.background = '#ff4d4d';
+            BotonCamara.disabled = false;
+            Ctx.NotificarEstado('Cámara e Inteligencia Artificial activadas. ¡Muévete!');
           }
-        );
-        // Reemplazar pistas de seguimiento anteriores del mismo tipo
-        if (Opciones.Cuerpo) Ctx.Animacion.EliminarPistasPorGrupo('SeguimientoCuerpo');
-        if (Opciones.Rostro) Ctx.Animacion.EliminarPistasPorGrupo('SeguimientoRostro');
-        Ctx.Animacion.AgregarPistas(Pistas);
-        const UltimoTiempo = Math.max(0, ...Pistas.flatMap((P) => P.Claves.map((C) => C.Tiempo)));
-        if (UltimoTiempo > Ctx.Animacion.Duracion) Ctx.Animacion.Duracion = Math.ceil(UltimoTiempo);
-        Ctx.NotificarEstado(`Seguimiento listo: ${Pistas.length} pistas editables generadas.`);
-        this.TextoSeguimiento.textContent = `Generadas ${Pistas.length} pistas editables.`;
-        this.BarraSeguimiento.style.width = '100%';
-      } catch (E) {
-        Ctx.NotificarEstado(`Error de seguimiento: ${(E as Error).message}`);
-        this.TextoSeguimiento.textContent = 'Error durante el seguimiento.';
-      } finally {
-        BotonProcesar.disabled = false;
+        } catch (e) {
+          Ctx.NotificarEstado('Error al arrancar motor Python.');
+          BotonCamara.textContent = '📷 Activar Cámara';
+          BotonCamara.disabled = false;
+        }
+      } else {
+        // Detener
+        try {
+          await fetch('/api/tracker/stop', { method: 'POST' });
+        } catch (e) {}
+        EstadoCamara = false;
+        BotonCamara.textContent = '📷 Activar Cámara';
+        BotonCamara.style.background = '';
+        Ctx.NotificarEstado('Cámara detenida.');
       }
     }, 'BotonPrimario');
-    Cuerpo.appendChild(BotonProcesar);
 
-    const { Barra, Texto } = this.CrearBarraProgreso(Cuerpo);
-    this.BarraSeguimiento = Barra;
-    this.TextoSeguimiento = Texto;
-    this.Nota(Cuerpo, 'Requiere conexión la primera vez (descarga los modelos de MediaPipe). El resultado siempre queda como claves editables: selecciona y arrastra los rombos en la línea de tiempo.');
+    Fila.append(BotonCamara);
+    Cuerpo.appendChild(Fila);
+
+    this.Nota(Cuerpo, 'Para grabar la animación generada por la cámara, ve a la sección "Receptor VMC" arriba y usa el botón "Grabar a Timeline".');
   }
 
   // -------- Escena y fondo (Etapa 4) --------

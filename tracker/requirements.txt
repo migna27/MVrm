@@ -6,3 +6,4 @@ tqdm==4.66.2
 requests==2.31.0
 onnxruntime==1.17.1
 torch==2.2.1
+python-osc==1.8.3

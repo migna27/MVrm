@@ -3,6 +3,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as multiparty from 'multiparty';
 import serveStatic from 'serve-static';
+import { spawn, ChildProcess } from 'child_process';
+
+let pythonTrackerProcess: ChildProcess | null = null;
 
 function localAssetsPlugin() {
   return {
@@ -13,6 +16,37 @@ function localAssetsPlugin() {
 
       // 2. Middleware de la API local
       server.middlewares.use(async (req: any, res: any, next: any) => {
+        // Controladores para arrancar/detener el script Python en vivo
+        if (req.url === '/api/tracker/start-live' && req.method === 'POST') {
+          if (pythonTrackerProcess) {
+            pythonTrackerProcess.kill();
+          }
+          
+          const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
+            ? './tracker/python_portable/python.exe' 
+            : 'python';
+
+          console.log('[API] Iniciando Motor Python (Live OSC)...');
+          pythonTrackerProcess = spawn(pythonExe, ['tracker/main.py', '--engine', 'mediapipe', '--live', '--osc-port', '39539'], {
+             cwd: process.cwd(),
+             stdio: 'inherit'
+          });
+          
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
+
+        if (req.url === '/api/tracker/stop' && req.method === 'POST') {
+          if (pythonTrackerProcess) {
+            pythonTrackerProcess.kill();
+            pythonTrackerProcess = null;
+            console.log('[API] Motor Python detenido.');
+          }
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: true }));
+          return;
+        }
         if (req.url === '/api/library' && req.method === 'GET') {
           const getFiles = (dir: string) => {
             const fullPath = path.join(process.cwd(), dir);

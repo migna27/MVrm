@@ -22,26 +22,47 @@ def export_to_vrm_format(tracks_smoothed, duration, output_json):
 
 def main():
     parser = argparse.ArgumentParser(description="Motor de Animación e Inteligencia Artificial")
-    parser.add_argument('--engine', type=str, choices=['mediapipe', 'rtmpose', 'mdm'], default='mediapipe', help='Motor a utilizar')
-    parser.add_argument('--input', type=str, help='Ruta del video de entrada')
+    parser.add_argument('--engine', type=str, choices=['mediapipe', 'rtmpose', 'mdm'], default='mediapipe')
+    parser.add_argument('--input', type=str, help='Ruta del video o ID de camara (ej: 0)')
     parser.add_argument('--prompt', type=str, help='Texto descriptivo (Solo para MDM)')
-    parser.add_argument('--output', type=str, required=True, help='Ruta del JSON de salida')
+    parser.add_argument('--output', type=str, help='Ruta del JSON de salida (Requerido en modo archivo)')
+    
+    # Nuevos parametros para Streaming en vivo (VMC/OSC)
+    parser.add_argument('--live', action='store_true', help='Activar modo en vivo (cámara a OSC)')
+    parser.add_argument('--osc-port', type=int, default=39539, help='Puerto destino OSC (VMC)')
+    parser.add_argument('--osc-ip', type=str, default='127.0.0.1', help='IP destino OSC')
     
     args = parser.parse_args()
     
     print(f"--- Iniciando IA Engine: {args.engine.upper()} ---")
     
+    osc_client = None
+    if args.live:
+        try:
+            from pythonosc.udp_client import SimpleUDPClient
+            osc_client = SimpleUDPClient(args.osc_ip, args.osc_port)
+            print(f"[INFO] Streaming OSC VMC hacia {args.osc_ip}:{args.osc_port}")
+        except ImportError:
+            print("[ERROR] Faltan librerías para OSC. Ejecuta: pip install python-osc")
+            sys.exit(1)
+            
+    if not args.live and not args.output:
+        print("[ERROR] Debes especificar --output en modo archivo, o usar --live para modo streaming.")
+        sys.exit(1)
+    
     tracks_raw = {}
     duration = 0
     
     if args.engine == 'mediapipe':
-        if not args.input:
-            print("[ERROR] El motor mediapipe requiere --input")
+        inp = args.input if args.input else ("0" if args.live else None)
+        if inp is None:
+            print("[ERROR] El motor mediapipe requiere --input (o usa --live)")
             sys.exit(1)
         from engines.mediapipe_engine import run_mediapipe_tracking
-        tracks_raw, duration = run_mediapipe_tracking(args.input)
+        tracks_raw, duration = run_mediapipe_tracking(inp, live=args.live, osc_client=osc_client)
         
     elif args.engine == 'rtmpose':
+        # RTMPose en vivo es posible pero pesado, por ahora stubs
         if not args.input:
             print("[ERROR] El motor rtmpose requiere --input")
             sys.exit(1)
@@ -55,8 +76,12 @@ def main():
         from engines.mdm_engine import run_mdm_generation
         tracks_raw, duration = run_mdm_generation(args.prompt)
         
+    if args.live:
+        print("[INFO] Streaming finalizado. Cerrando motor.")
+        sys.exit(0)
+        
     if not tracks_raw:
-        print("[AVISO] No se generaron pistas. Comprueba los stubs o el video.")
+        print("[AVISO] No se generaron pistas.")
         sys.exit(0)
         
     print("[INFO] Aplicando filtro cinemático (Savitzky-Golay)...")
