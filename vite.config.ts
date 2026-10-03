@@ -165,6 +165,38 @@ function localAssetsPlugin() {
           return;
         }
 
+        // Instalar modelo real MoMask
+        if (req.url === '/api/tracker/setup-momask' && req.method === 'POST') {
+          const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
+            ? './tracker/python_portable/python.exe' : 'python';
+            
+          console.log(`[API] Iniciando descarga e instalacion de MoMask...`);
+          (global as any).trackerStatus = 'Iniciando instalación de MoMask...';
+          
+          const proc = spawn(pythonExe, ['-u', 'tracker/setup_momask.py'], { cwd: process.cwd() });
+          
+          proc.stdout.on('data', (d: any) => {
+             const msg = d.toString();
+             if (msg.includes('[PROGRESS]') || msg.includes('[STATE]')) {
+                (global as any).trackerStatus = msg.replace('[PROGRESS]', '').replace('[STATE]', '').trim();
+             }
+             console.log(`[PyMoMask]: ${msg}`);
+          });
+          proc.stderr.on('data', (d: any) => console.error(`[PyMoMask ERR]: ${d.toString()}`));
+          
+          proc.on('close', (code: any) => {
+            res.setHeader('Content-Type', 'application/json');
+            if (code === 0) {
+              (global as any).trackerStatus = 'MoMask instalado exitosamente.';
+              res.end(JSON.stringify({ success: true }));
+            } else {
+              (global as any).trackerStatus = 'Error durante la instalación de MoMask.';
+              res.end(JSON.stringify({ success: false, error: 'Fallo en Python' }));
+            }
+          });
+          return;
+        }
+
         if (req.url === '/api/library' && req.method === 'GET') {
           const getFiles = (dir: string) => {
             const fullPath = path.join(process.cwd(), dir);

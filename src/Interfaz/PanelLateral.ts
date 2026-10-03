@@ -760,6 +760,37 @@ export class PanelLateral {
     InputPrompt.style.color = 'white';
     InputPrompt.style.borderRadius = '5px';
     
+    const BotonDescargarMoMask = this.Boton('⬇️ Instalar Motor Real (MoMask, ~2GB)', async () => {
+      BotonDescargarMoMask.disabled = true;
+      BotonDescargarMoMask.textContent = 'Instalando... (Puede tardar 10+ minutos)';
+      Ctx.NotificarEstado('Instalando MoMask y PyTorch... Mira la consola para detalles.');
+      
+      IntervaloProgreso = setInterval(async () => {
+        try {
+          const s = await fetch('/api/tracker/status');
+          const txt = await s.text();
+          if (txt && EtiquetaProgreso) EtiquetaProgreso.textContent = txt;
+        } catch(e) {}
+      }, 500);
+      
+      try {
+        const res = await fetch('/api/tracker/setup-momask', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          Ctx.NotificarEstado('¡MoMask instalado con éxito!');
+          BotonDescargarMoMask.style.display = 'none'; // Ocultarlo tras instalar
+        } else {
+          Ctx.NotificarEstado('Error al instalar MoMask.');
+        }
+      } catch(e) {
+        Ctx.NotificarEstado('Fallo en la conexión durante la instalación.');
+      } finally {
+        BotonDescargarMoMask.disabled = false;
+        BotonDescargarMoMask.textContent = '⬇️ Instalar Motor Real (MoMask, ~2GB)';
+        if (IntervaloProgreso) clearInterval(IntervaloProgreso);
+      }
+    }, 'BotonSecundario');
+    
     const BotonGenerarMDM = this.Boton('✨ Sintetizar Animación', async () => {
       if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo VRM.'); return; }
       if (!InputPrompt.value.trim()) { Ctx.NotificarEstado('Escribe una acción primero.'); return; }
@@ -809,6 +840,7 @@ export class PanelLateral {
     
     ContenedorMDM.appendChild(InputPrompt);
     ContenedorMDM.appendChild(BotonGenerarMDM);
+    ContenedorMDM.appendChild(BotonDescargarMoMask);
 
     SelectorMotor.addEventListener('change', () => {
       const esMDM = SelectorMotor.value === 'mdm';
