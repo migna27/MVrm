@@ -11,7 +11,12 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
     source = int(video_path) if live and video_path.isdigit() else video_path
     if live and not video_path: source = 0
     
-    cap = cv2.VideoCapture(source)
+    import platform
+    if live and isinstance(source, int) and platform.system() == 'Windows':
+        # DirectShow abre la cámara al instante en Windows (evita demoras o bloqueos de Media Foundation)
+        cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
+    else:
+        cap = cv2.VideoCapture(source)
     if not cap.isOpened():
         print(f"[ERROR] No se pudo abrir la cámara o video: {source}")
         return {}, 0

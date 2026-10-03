@@ -27,12 +27,17 @@ function localAssetsPlugin() {
             : 'python';
 
           console.log('[API] Iniciando Motor Python (Live OSC)...');
-          pythonTrackerProcess = spawn(pythonExe, ['tracker/main.py', '--engine', 'mediapipe', '--live', '--osc-port', '39539'], {
+          pythonTrackerProcess = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', 'mediapipe', '--live', '--osc-port', '39539'], {
              cwd: process.cwd()
           });
           
           pythonTrackerProcess.stdout?.on('data', (data) => console.log(`[Python]: ${data.toString()}`));
-          pythonTrackerProcess.stderr?.on('data', (data) => console.error(`[Python ERROR]: ${data.toString()}`));
+          pythonTrackerProcess.stderr?.on('data', (data) => {
+            const msg = data.toString();
+            // Filtrar falsos errores de MediaPipe (mensajes de INFO de C++)
+            if (msg.includes('Created TensorFlow Lite XNNPACK delegate')) return;
+            console.error(`[Python ERROR]: ${msg}`);
+          });
           pythonTrackerProcess.on('close', (code) => console.log(`[Python] Proceso terminado con código ${code}`));
 
           res.setHeader('Content-Type', 'application/json');
