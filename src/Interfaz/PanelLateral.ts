@@ -902,7 +902,7 @@ export class PanelLateral {
     this.Deslizador(Cuerpo, 'Intensidad Luz Direccional', 0, 5, 0.1, 2.2, (V) => Ctx.Escena.EstablecerLuzDireccional(V));
     this.Deslizador(Cuerpo, 'Intensidad Luz Ambiental', 0, 3, 0.1, 0.85, (V) => Ctx.Escena.EstablecerLuzAmbiental(V));
 
-    this.Nota(Cuerpo, 'Post-procesamiento y partículas.');
+    this.Nota(Cuerpo, 'Post-procesamiento y efectos de cámara.');
     
     // Variables para retener el estado de Bloom
     let FuerzaB = 0.55;
@@ -913,6 +913,16 @@ export class PanelLateral {
     this.Deslizador(Cuerpo, 'Fuerza Bloom', 0, 3, 0.1, FuerzaB, (V) => { FuerzaB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
     this.Deslizador(Cuerpo, 'Radio Bloom', 0, 1, 0.05, RadioB, (V) => { RadioB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
     this.Deslizador(Cuerpo, 'Umbral Bloom', 0, 1, 0.05, UmbralB, (V) => { UmbralB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
+
+    this.Casilla(Cuerpo, 'Aberración Cromática (RGB Shift)', false, (V) => Ctx.Escena.EstablecerAberracionCromatica(V, 0.0025));
+    
+    let IntensidadR = 0.35;
+    const CasillaRuido = this.Casilla(Cuerpo, 'Ruido de Película (Film Grain)', false, (V) => Ctx.Escena.EstablecerRuido(V, IntensidadR));
+    this.Deslizador(Cuerpo, 'Intensidad Ruido', 0, 1, 0.05, IntensidadR, (V) => { IntensidadR = V; Ctx.Escena.EstablecerRuido(CasillaRuido.checked, IntensidadR); });
+
+    let OscuridadV = 1.2;
+    const CasillaVigneta = this.Casilla(Cuerpo, 'Viñeta (Bordes Oscuros)', false, (V) => Ctx.Escena.EstablecerVigneta(V, OscuridadV, 1.0));
+    this.Deslizador(Cuerpo, 'Intensidad Viñeta', 0, 3, 0.1, OscuridadV, (V) => { OscuridadV = V; Ctx.Escena.EstablecerVigneta(CasillaVigneta.checked, OscuridadV, 1.0); });
 
     const Fila = document.createElement('div');
     Fila.className = 'FilaControles';

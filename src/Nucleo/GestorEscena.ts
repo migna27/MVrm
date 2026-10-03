@@ -11,6 +11,10 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { RGBShiftShader } from 'three/examples/jsm/shaders/RGBShiftShader.js';
+import { FilmShader } from 'three/examples/jsm/shaders/FilmShader.js';
+import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import { Limitar } from '../Utilidades';
 
 export class GestorEscena {
@@ -22,6 +26,10 @@ export class GestorEscena {
 
   private Compositor: EffectComposer | null = null;
   private PaseBloom: UnrealBloomPass | null = null;
+  private PaseRGB!: ShaderPass;
+  private PaseRuido!: ShaderPass;
+  private PaseVigneta!: ShaderPass;
+  
   private Contenedor!: HTMLElement;
 
   private LuzDireccional!: THREE.DirectionalLight;
@@ -34,6 +42,10 @@ export class GestorEscena {
   public BloomActivo = false;
   public BloomFuerza = 0.55;
   public EscalaPrevia = 0.75; // Escala de resolución de la previa en tiempo real
+  
+  public AberracionCromaticaActiva = false;
+  public RuidoActivo = false;
+  public VignetaActiva = false;
 
   /** Inicializa el renderer, la cámara, las luces y la rejilla de referencia. */
   public Inicializar(Contenedor: HTMLElement): void {
@@ -104,11 +116,28 @@ export class GestorEscena {
     Piso.position.y = -0.001;
     this.Escena.add(Piso);
 
-    // Compositor con pase de bloom (brillo) opcional
+    // Compositor de post-procesado
     this.Compositor = new EffectComposer(this.Renderer);
     this.Compositor.addPass(new RenderPass(this.Escena, this.Camara));
+    
     this.PaseBloom = new UnrealBloomPass(new THREE.Vector2(1, 1), this.BloomFuerza, 0.6, 0.85);
     this.Compositor.addPass(this.PaseBloom);
+
+    this.PaseRGB = new ShaderPass(RGBShiftShader);
+    this.PaseRGB.uniforms['amount'].value = 0.0025;
+    this.Compositor.addPass(this.PaseRGB);
+
+    this.PaseRuido = new ShaderPass(FilmShader);
+    this.PaseRuido.uniforms['nIntensity'].value = 0.35;
+    this.PaseRuido.uniforms['sIntensity'].value = 0.0;
+    this.PaseRuido.uniforms['grayscale'].value = 0.0;
+    this.Compositor.addPass(this.PaseRuido);
+
+    this.PaseVigneta = new ShaderPass(VignetteShader);
+    this.PaseVigneta.uniforms['offset'].value = 1.0;
+    this.PaseVigneta.uniforms['darkness'].value = 1.2;
+    this.Compositor.addPass(this.PaseVigneta);
+
     this.Compositor.addPass(new OutputPass());
 
     window.addEventListener('resize', () => this.Redimensionar());
@@ -142,14 +171,44 @@ export class GestorEscena {
     this.Camara.updateProjectionMatrix();
   }
 
-  /** Renderiza un cuadro: usa el compositor solo si el bloom está activo. */
+  /** Renderiza un cuadro: usa el compositor si algún efecto está activo. */
   public Renderizar(): void {
     this.Controles.update();
-    if (this.BloomActivo && this.Compositor) {
-      this.PaseBloom!.strength = this.BloomFuerza;
+    const UsarCompositor = this.BloomActivo || this.AberracionCromaticaActiva || this.RuidoActivo || this.VignetaActiva;
+
+    if (UsarCompositor && this.Compositor) {
+      if (this.PaseBloom) {
+        this.PaseBloom.enabled = this.BloomActivo;
+        this.PaseBloom.strength = this.BloomFuerza;
+      }
+      if (this.PaseRGB) this.PaseRGB.enabled = this.AberracionCromaticaActiva;
+      if (this.PaseRuido) this.PaseRuido.enabled = this.RuidoActivo;
+      if (this.PaseVigneta) this.PaseVigneta.enabled = this.VignetaActiva;
+      
       this.Compositor.render();
     } else {
       this.Renderer.render(this.Escena, this.Camara);
+    }
+  }
+
+  /** Activa o desactiva la aberración cromática. */
+  public EstablecerAberracionCromatica(Activa: boolean, Cantidad?: number): void {
+    this.AberracionCromaticaActiva = Activa;
+    if (Cantidad !== undefined && this.PaseRGB) this.PaseRGB.uniforms['amount'].value = Cantidad;
+  }
+
+  /** Activa o desactiva el ruido de película. */
+  public EstablecerRuido(Activo: boolean, Intensidad?: number): void {
+    this.RuidoActivo = Activo;
+    if (Intensidad !== undefined && this.PaseRuido) this.PaseRuido.uniforms['nIntensity'].value = Intensidad;
+  }
+
+  /** Activa o desactiva la viñeta oscura. */
+  public EstablecerVigneta(Activa: boolean, Oscuridad?: number, Desplazamiento?: number): void {
+    this.VignetaActiva = Activa;
+    if (this.PaseVigneta) {
+      if (Oscuridad !== undefined) this.PaseVigneta.uniforms['darkness'].value = Oscuridad;
+      if (Desplazamiento !== undefined) this.PaseVigneta.uniforms['offset'].value = Desplazamiento;
     }
   }
 
