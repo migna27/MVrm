@@ -197,7 +197,7 @@ export class GestorModelos {
   /** Aplica una posición local a un hueso de forma relativa a su pose de reposo (Delta). */
   public EstablecerPosicionHueso(Nombre: string, Offset: THREE.Vector3): void {
     const Nodo = this.ObtenerNodoHueso(Nombre);
-    const Reposo = this.EstadoReposo.get(Nombre);
+    const Reposo = this.PoseReposo.get(Nombre);
     if (Nodo && Reposo) {
       Nodo.position.copy(Reposo.Posicion).add(Offset);
     }
@@ -206,7 +206,7 @@ export class GestorModelos {
   /** Lee el desplazamiento (offset) relativo a la pose de reposo. */
   public ObtenerPosicionHueso(Nombre: string): THREE.Vector3 {
     const Nodo = this.ObtenerNodoHueso(Nombre);
-    const Reposo = this.EstadoReposo.get(Nombre);
+    const Reposo = this.PoseReposo.get(Nombre);
     if (Nodo && Reposo) {
       return Nodo.position.clone().sub(Reposo.Posicion);
     }
