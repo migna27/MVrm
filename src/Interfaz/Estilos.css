@@ -91,24 +91,26 @@ input[type="checkbox"] { accent-color: var(--ColorAcento); }
 /* ---------- Zona central ---------- */
 #ZonaCentral {
   display: grid;
-  grid-template-columns: 322px 1fr;
+  grid-template-columns: 310px 1fr 310px;
   min-height: 0;
 }
 
-#PanelLateral {
+.PanelDesplazable {
   overflow-y: auto;
   background: var(--ColorPanel);
-  border-right: 1px solid var(--ColorBorde);
   padding: 8px;
 }
 
-#PanelLateral details {
+#PanelIzquierdo { border-right: 1px solid var(--ColorBorde); }
+#PanelDerecho { border-left: 1px solid var(--ColorBorde); }
+
+.PanelDesplazable details {
   background: var(--ColorPanelClaro);
   border: 1px solid var(--ColorBorde);
   border-radius: 8px;
   margin-bottom: 8px;
 }
-#PanelLateral summary {
+.PanelDesplazable summary {
   padding: 9px 12px;
   cursor: pointer;
   font-weight: 600;
@@ -116,9 +118,9 @@ input[type="checkbox"] { accent-color: var(--ColorAcento); }
   letter-spacing: 0.3px;
   user-select: none;
 }
-#PanelLateral summary::before { content: '▸ '; color: var(--ColorAcento); }
-#PanelLateral details[open] summary::before { content: '▾ '; }
-#PanelLateral .CuerpoSeccion { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.PanelDesplazable summary::before { content: '▸ '; color: var(--ColorAcento); }
+.PanelDesplazable details[open] summary::before { content: '▾ '; }
+.PanelDesplazable .CuerpoSeccion { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
 
 .FilaControles { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .FilaControles > label { flex: 1; min-width: 0; }
@@ -189,7 +191,7 @@ input[type="checkbox"] { accent-color: var(--ColorAcento); }
 #LienzoLineaTiempo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 /* Barra de desplazamiento discreta */
-#PanelLateral::-webkit-scrollbar, #ControlesTransporte::-webkit-scrollbar { width: 8px; height: 8px; }
-#PanelLateral::-webkit-scrollbar-thumb, #ControlesTransporte::-webkit-scrollbar-thumb {
+.PanelDesplazable::-webkit-scrollbar, #ControlesTransporte::-webkit-scrollbar { width: 8px; height: 8px; }
+.PanelDesplazable::-webkit-scrollbar-thumb, #ControlesTransporte::-webkit-scrollbar-thumb {
   background: var(--ColorBorde); border-radius: 4px;
 }

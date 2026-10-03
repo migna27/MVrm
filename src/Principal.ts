@@ -47,7 +47,11 @@ const Contexto: ContextoAplicacion = {
   RefrescarPanel: () => Panel.RefrescarDinamico()
 };
 
-const Panel = new PanelLateral(document.getElementById('PanelLateral')!, Contexto);
+const Panel = new PanelLateral(
+  document.getElementById('PanelIzquierdo')!,
+  document.getElementById('PanelDerecho')!,
+  Contexto
+);
 const Linea = new LineaTiempo(document.getElementById('LienzoLineaTiempo') as HTMLCanvasElement, Contexto);
 
 Animacion.AlCambiarPistas = () => Linea.Dibujar();

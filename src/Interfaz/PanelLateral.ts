@@ -27,7 +27,7 @@ export class PanelLateral {
   private TextoExportacion!: HTMLElement;
   private ArchivoVideo: File | null = null;
 
-  constructor(private Raiz: HTMLElement, private Contexto: ContextoAplicacion) {
+  constructor(private RaizIzq: HTMLElement, private RaizDer: HTMLElement, private Contexto: ContextoAplicacion) {
     this.Construir();
   }
 
@@ -35,7 +35,7 @@ export class PanelLateral {
   // Auxiliares de construcción de interfaz
   // --------------------------------------------------------------------------
 
-  private Seccion(Titulo: string, Abierta = false): HTMLElement {
+  private Seccion(Padre: HTMLElement, Titulo: string, Abierta = false): HTMLElement {
     const Detalles = document.createElement('details');
     Detalles.open = Abierta;
     const Resumen = document.createElement('summary');
@@ -43,7 +43,7 @@ export class PanelLateral {
     const Cuerpo = document.createElement('div');
     Cuerpo.className = 'CuerpoSeccion';
     Detalles.append(Resumen, Cuerpo);
-    this.Raiz.appendChild(Detalles);
+    Padre.appendChild(Detalles);
     return Cuerpo;
   }
 
@@ -123,19 +123,22 @@ export class PanelLateral {
   // --------------------------------------------------------------------------
 
   private Construir(): void {
+    // Panel Derecho (Inspector / Propiedades)
     this.ConstruirSeccionModelo();
     this.ConstruirSeccionExpresiones();
+    this.ConstruirSeccionExportacion();
+
+    // Panel Izquierdo (Media / Assets / Efectos)
     this.ConstruirSeccionBiblioteca();
-    this.ConstruirSeccionSeguimiento();
     this.ConstruirSeccionEscena();
     this.ConstruirSeccionEfectos();
     this.ConstruirSeccionAudio();
-    this.ConstruirSeccionExportacion();
+    // this.ConstruirSeccionSeguimiento(); // Deshabilitado temporalmente por petición del usuario
   }
 
   // -------- Modelo VRM (Etapa 1) --------
   private ConstruirSeccionModelo(): void {
-    const Cuerpo = this.Seccion('Modelo VRM', true);
+    const Cuerpo = this.Seccion(this.RaizDer, 'Modelo VRM', true);
     const Ctx = this.Contexto;
 
     const Fila = document.createElement('div');
@@ -259,7 +262,7 @@ export class PanelLateral {
 
   // -------- Expresiones faciales (Etapa 2) --------
   private ConstruirSeccionExpresiones(): void {
-    const Cuerpo = this.Seccion('Expresiones faciales');
+    const Cuerpo = this.Seccion(this.RaizDer, 'Expresiones faciales', true);
     this.ContenedorExpresiones = document.createElement('div');
     this.ContenedorExpresiones.style.display = 'flex';
     this.ContenedorExpresiones.style.flexDirection = 'column';
@@ -304,7 +307,7 @@ export class PanelLateral {
 
   // -------- Biblioteca de animaciones (Etapa 2 y 3) --------
   private ConstruirSeccionBiblioteca(): void {
-    const Cuerpo = this.Seccion('Biblioteca de animaciones');
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Biblioteca de animaciones', true);
     const Ctx = this.Contexto;
 
     const Rejilla = document.createElement('div');
@@ -356,7 +359,7 @@ export class PanelLateral {
 
   // -------- Seguimiento por video (Etapa 3) --------
   private ConstruirSeccionSeguimiento(): void {
-    const Cuerpo = this.Seccion('Seguimiento por video');
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Seguimiento por video');
     const Ctx = this.Contexto;
 
     Cuerpo.appendChild(this.Boton('Cargar video…', async () => {
@@ -438,7 +441,7 @@ export class PanelLateral {
 
   // -------- Escena y fondo (Etapa 4) --------
   private ConstruirSeccionEscena(): void {
-    const Cuerpo = this.Seccion('Escena y fondo');
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Escena y fondo');
     const Ctx = this.Contexto;
 
     const Fila = document.createElement('div');
@@ -472,7 +475,7 @@ export class PanelLateral {
 
   // -------- Efectos (Etapa 4) --------
   private ConstruirSeccionEfectos(): void {
-    const Cuerpo = this.Seccion('Efectos');
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Efectos');
     const Ctx = this.Contexto;
 
     const CasillaBloom = this.Casilla(Cuerpo, 'Brillo (bloom)', false, (V) => Ctx.Escena.EstablecerBloom(V));
@@ -500,7 +503,7 @@ export class PanelLateral {
 
   // -------- Audio (Etapa 4) --------
   private ConstruirSeccionAudio(): void {
-    const Cuerpo = this.Seccion('Audio');
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Audio');
     const Ctx = this.Contexto;
 
     const Fila = document.createElement('div');
@@ -547,7 +550,7 @@ export class PanelLateral {
 
   // -------- Exportación (Etapa 5) --------
   private ConstruirSeccionExportacion(): void {
-    const Cuerpo = this.Seccion('Exportar video', true);
+    const Cuerpo = this.Seccion(this.RaizDer, 'Exportar video', true);
     const Ctx = this.Contexto;
 
     const Fila = document.createElement('div');
