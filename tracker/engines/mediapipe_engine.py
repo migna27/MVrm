@@ -30,6 +30,13 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
     print("[INFO] Iniciando captura. Presiona ESC en la ventana de preview para salir.")
 
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5, model_complexity=1 if live else 2) as holistic:
+        
+        # Calcular total frames para videos
+        total_frames = 0
+        if not live:
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            print(f"[STATE] Analizando video ({total_frames} frames)...")
+
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret: break
@@ -37,6 +44,11 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
             if live or (frame_idx % frame_interval == 0):
                 time_sec = frame_idx / video_fps
                 
+                # Feedback de progreso para Node.js
+                if not live and total_frames > 0 and frame_idx % (frame_interval * 10) == 0:
+                    pct = int((frame_idx / total_frames) * 100)
+                    print(f"[PROGRESS] Analizando: {pct}% completado")
+
                 if live:
                     frame = cv2.flip(frame, 1)
                     
@@ -56,18 +68,25 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                     mp_drawing.draw_landmarks(image_bgr, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
                 angles = {}
+                positions = {}
                 # Postura (Cuerpo)
                 if results.pose_world_landmarks:
                     lms = results.pose_world_landmarks.landmark
-                    ls = np.array([lms[11].x, lms[11].y, lms[11].z])
-                    rs = np.array([lms[12].x, lms[12].y, lms[12].z])
-                    le = np.array([lms[13].x, lms[13].y, lms[13].z])
-                    re = np.array([lms[14].x, lms[14].y, lms[14].z])
-                    lw = np.array([lms[15].x, lms[15].y, lms[15].z])
-                    rw = np.array([lms[16].x, lms[16].y, lms[16].z])
+                    def pt(idx): return np.array([lms[idx].x, lms[idx].y, lms[idx].z])
                     
-                    angles = calculate_euler_angles_from_landmarks(ls, rs, le, re, lw, rw)
-                    angles = apply_anti_clipping(angles, lw, rw, ls, rs)
+                    landmarks_dict = {
+                        'ls': pt(11), 'rs': pt(12),
+                        'le': pt(13), 're': pt(14),
+                        'lw': pt(15), 'rw': pt(16),
+                        'lh': pt(23), 'rh': pt(24),
+                        'lk': pt(25), 'rk': pt(26),
+                        'la': pt(27), 'ra': pt(28),
+                        'nose': pt(0)
+                    }
+                    
+                    from utils.math_utils import calculate_full_body_angles, apply_anti_clipping
+                    angles, positions = calculate_full_body_angles(landmarks_dict)
+                    angles = apply_anti_clipping(angles, landmarks_dict['lw'], landmarks_dict['rw'], landmarks_dict['ls'], landmarks_dict['rs'])
                     
                 # Manos
                 from utils.math_utils import calculate_hand_angles
@@ -78,7 +97,7 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                     r_hand_angles = calculate_hand_angles(results.right_hand_landmarks.landmark, is_right=True)
                     angles.update(r_hand_angles)
                 
-                if angles:
+                if angles or positions:
                     if live and osc_client:
                         from scipy.spatial.transform import Rotation
                         for bone, rot in angles.items():
@@ -88,12 +107,20 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                                 osc_client.send_message("/VMC/Ext/Bone/Pos", [bone, 0.0, 0.0, 0.0, float(qx), float(qy), float(qz), float(qw)])
                             except Exception as e:
                                 pass
+                        
+                        if 'hips' in positions:
+                            hx, hy, hz = positions['hips']
+                            osc_client.send_message("/VMC/Ext/Root/Pos", ["root", float(hx), float(hy), float(hz), 0.0, 0.0, 0.0, 1.0])
+                            
                         osc_client.send_message("/VMC/Ext/Blend/Apply", [])
                         
                     else:
                         for bone, rot in angles.items():
                             if bone not in tracks_raw: tracks_raw[bone] = []
-                            tracks_raw[bone].append({"Id": f"tr_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": rot})
+                            tracks_raw[bone].append({"Id": f"tr_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": rot, "Tipo": "HuesoRotacion"})
+                        for bone, pos in positions.items():
+                            if bone not in tracks_raw: tracks_raw[bone] = []
+                            tracks_raw[bone].append({"Id": f"tr_pos_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": pos, "Tipo": "HuesoPosicion"})
                 
                 if live:
                     cv2.imshow("Animador VRM - Preview Tracking", image_bgr)

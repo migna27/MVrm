@@ -16,32 +16,48 @@ function localAssetsPlugin() {
 
       // 2. Middleware de la API local
       server.middlewares.use(async (req: any, res: any, next: any) => {
+        
+        if (req.url === '/api/tracker/status' && req.method === 'GET') {
+          res.setHeader('Content-Type', 'text/plain');
+          res.end((global as any).trackerStatus || '');
+          return;
+        }
+
         // Controladores para arrancar/detener el script Python en vivo
         if (req.url === '/api/tracker/start-live' && req.method === 'POST') {
-          if (pythonTrackerProcess) {
-            pythonTrackerProcess.kill();
-          }
-          
-          const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
-            ? './tracker/python_portable/python.exe' 
-            : 'python';
+          let body = '';
+          req.on('data', (chunk: any) => body += chunk.toString());
+          req.on('end', () => {
+            const data = body ? JSON.parse(body) : { engine: 'mediapipe' };
+            if (pythonTrackerProcess) pythonTrackerProcess.kill();
+            
+            const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
+              ? './tracker/python_portable/python.exe' : 'python';
 
-          console.log('[API] Iniciando Motor Python (Live OSC)...');
-          pythonTrackerProcess = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', 'mediapipe', '--live', '--osc-port', '39539'], {
-             cwd: process.cwd()
-          });
-          
-          pythonTrackerProcess.stdout?.on('data', (data) => console.log(`[Python]: ${data.toString()}`));
-          pythonTrackerProcess.stderr?.on('data', (data) => {
-            const msg = data.toString();
-            // Filtrar falsos errores de MediaPipe (mensajes de INFO de C++)
-            if (msg.includes('Created TensorFlow Lite XNNPACK delegate')) return;
-            console.error(`[Python ERROR]: ${msg}`);
-          });
-          pythonTrackerProcess.on('close', (code) => console.log(`[Python] Proceso terminado con código ${code}`));
+            console.log(`[API] Iniciando Motor Python (Live OSC) [${data.engine}]...`);
+            (global as any).trackerStatus = 'Iniciando cámara en vivo...';
+            
+            pythonTrackerProcess = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', data.engine, '--live', '--osc-port', '39539'], {
+               cwd: process.cwd()
+            });
+            
+            pythonTrackerProcess.stdout?.on('data', (d: any) => {
+               const msg = d.toString();
+               if (msg.includes('[PROGRESS]') || msg.includes('[STATE]')) {
+                  (global as any).trackerStatus = msg.replace('[PROGRESS]', '').replace('[STATE]', '').trim();
+               }
+               console.log(`[Python]: ${msg}`);
+            });
+            pythonTrackerProcess.stderr?.on('data', (d: any) => {
+              const msg = d.toString();
+              if (msg.includes('Created TensorFlow Lite XNNPACK delegate')) return;
+              console.error(`[Python ERROR]: ${msg}`);
+            });
+            pythonTrackerProcess.on('close', (code: any) => console.log(`[Python] Proceso terminado con código ${code}`));
 
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ success: true }));
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ success: true }));
+          });
           return;
         }
 
@@ -50,6 +66,7 @@ function localAssetsPlugin() {
             pythonTrackerProcess.kill();
             pythonTrackerProcess = null;
             console.log('[API] Motor Python detenido.');
+            (global as any).trackerStatus = 'Motor detenido.';
           }
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ success: true }));
@@ -63,6 +80,7 @@ function localAssetsPlugin() {
           req.on('end', () => {
             const data = JSON.parse(body);
             const inputPath = path.join(process.cwd(), data.videoPath);
+            const engine = data.engine || 'mediapipe';
             const outName = `track_${Date.now()}.json`;
             const outDir = path.join(process.cwd(), 'user', 'animations');
             if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
@@ -71,10 +89,18 @@ function localAssetsPlugin() {
             const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
               ? './tracker/python_portable/python.exe' : 'python';
 
-            console.log(`[API] Procesando video: ${inputPath}`);
-            const proc = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', 'mediapipe', '--input', inputPath, '--output', outPath], { cwd: process.cwd() });
+            console.log(`[API] Procesando video [${engine}]: ${inputPath}`);
+            (global as any).trackerStatus = 'Inicializando motor IA...';
             
-            proc.stdout.on('data', (d) => console.log(`[PyVideo]: ${d.toString()}`));
+            const proc = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', engine, '--input', inputPath, '--output', outPath], { cwd: process.cwd() });
+            
+            proc.stdout.on('data', (d) => {
+               const msg = d.toString();
+               if (msg.includes('[PROGRESS]') || msg.includes('[STATE]')) {
+                  (global as any).trackerStatus = msg.replace('[PROGRESS]', '').replace('[STATE]', '').trim();
+               }
+               console.log(`[PyVideo]: ${msg}`);
+            });
             proc.stderr.on('data', (d) => {
                const msg = d.toString();
                if (!msg.includes('Created TensorFlow Lite XNNPACK delegate')) console.error(`[PyVideo ERR]: ${msg}`);
@@ -82,9 +108,11 @@ function localAssetsPlugin() {
             
             proc.on('close', (code) => {
               if (code === 0 && fs.existsSync(outPath)) {
+                (global as any).trackerStatus = '¡Proceso terminado!';
                 res.setHeader('Content-Type', 'application/json');
                 res.end(JSON.stringify({ success: true, jsonUrl: `/user/animations/${outName}` }));
               } else {
+                (global as any).trackerStatus = 'Error durante el proceso.';
                 res.statusCode = 500;
                 res.end(JSON.stringify({ success: false, error: 'Error procesando video' }));
               }

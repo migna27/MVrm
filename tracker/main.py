@@ -9,13 +9,20 @@ from utils.math_utils import smooth_tracks
 def export_to_vrm_format(tracks_smoothed, duration, output_json):
     pistas_finales = []
     for bone, keys in tracks_smoothed.items():
+        tipo = keys[0].get("Tipo", "HuesoRotacion") if len(keys) > 0 else "HuesoRotacion"
+        
+        # Limpiar keys antes de guardar
+        claves_limpias = []
+        for k in keys:
+            claves_limpias.append({"Id": k["Id"], "Tiempo": k["Tiempo"], "Valor": k["Valor"]})
+            
         pistas_finales.append({
             "Id": f"pista_python_{bone}",
             "Nombre": f"Tracking Python {bone}",
-            "Tipo": "HuesoRotacion",
+            "Tipo": tipo,
             "Objetivo": bone,
             "Grupo": "SeguimientoCuerpo",
-            "Claves": keys
+            "Claves": claves_limpias
         })
         
     out_data = {"Duracion": duration, "Pistas": pistas_finales}
