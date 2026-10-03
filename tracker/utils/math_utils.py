@@ -67,16 +67,16 @@ def calculate_full_body_angles(landmarks):
         # El espacio base es: +X = Derecha de la pantalla (Izquierda del personaje), +Y = Arriba, +Z = Lejos de la cámara
         # El eje +X observado es desde la oreja derecha hacia la oreja izquierda
         x_axis = lear - rear 
-        x_axis /= np.linalg.norm(x_axis)
+        x_axis /= (np.linalg.norm(x_axis) + 1e-6)
         
         # El eje +Z observado (lejos de la cámara) es desde la nariz hacia el centro de las orejas
         head_mid = (lear + rear) / 2.0
         z_axis = head_mid - nose
-        z_axis /= np.linalg.norm(z_axis)
+        z_axis /= (np.linalg.norm(z_axis) + 1e-6)
         
         # El eje +Y observado (arriba) es el producto cruz Z x X
         y_axis = np.cross(z_axis, x_axis)
-        y_axis /= np.linalg.norm(y_axis)
+        y_axis /= (np.linalg.norm(y_axis) + 1e-6)
         
         # Recalcular X para asegurar ortogonalidad perfecta
         x_axis = np.cross(y_axis, z_axis)

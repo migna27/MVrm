@@ -98,12 +98,16 @@ def run_rtmpose_tracking(source, live=False, osc_client=None, fps_target=24):
         
         time_sec = frame_idx / video_fps
         
-        # RTMPose requiere 192x256
-        # Hacemos un crop central
+        # RTMPose requiere 192x256 (Ratio 3:4)
         h, w = frame.shape[:2]
-        size = min(h, w)
+        target_w = int(h * 0.75)
+        if target_w <= w:
+            crop_w, crop_h = target_w, h
+        else:
+            crop_w, crop_h = w, int(w / 0.75)
+            
         cy, cx = h//2, w//2
-        crop = frame[cy-size//2 : cy+size//2, cx-size//2 : cx+size//2]
+        crop = frame[cy-crop_h//2 : cy+crop_h//2, cx-crop_w//2 : cx+crop_w//2].copy()
         resized = cv2.resize(crop, (192, 256))
         
         # Preprocesamiento ImageNet
@@ -115,8 +119,6 @@ def run_rtmpose_tracking(source, live=False, osc_client=None, fps_target=24):
         # Inferencia
         start_t = time.time()
         outputs = session.run(None, {input_name: input_data})
-        # outputs usualmente es un heatmap [1, 17, 256, 192] (SimCC) o coords directas dependiendo del export.
-        # Asumiendo export SimCC (heatmap X e Y):
         simcc_x = outputs[0]
         simcc_y = outputs[1]
         
@@ -132,9 +134,11 @@ def run_rtmpose_tracking(source, live=False, osc_client=None, fps_target=24):
             
         mp_lms = map_coco_to_mp(kpts, scores)
         
-        # Dibujar debug en 2D
+        # Dibujar debug en 2D sobre la imagen HD recortada
         for pt in kpts:
-            cv2.circle(resized, (int(pt[0]), int(pt[1])), 3, (0, 255, 0), -1)
+            px = int((pt[0] / 192.0) * crop_w)
+            py = int((pt[1] / 256.0) * crop_h)
+            cv2.circle(crop, (px, py), 6, (0, 255, 0), -1)
             
         # Calcular ángulos con el engine matemático 
         from utils.math_utils import calculate_full_body_angles
@@ -161,7 +165,7 @@ def run_rtmpose_tracking(source, live=False, osc_client=None, fps_target=24):
                     tracks_raw[bone].append({"Id": f"tr_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": rot, "Tipo": "HuesoRotacion"})
                     
         if live:
-            cv2.imshow("Animador VRM - RTMPose", resized)
+            cv2.imshow("Animador VRM - RTMPose", crop)
             if cv2.waitKey(1) & 0xFF == 27: break
             
         frame_idx += 1
