@@ -60,7 +60,8 @@ export class GestorExportacion {
     for (const Perfil of Perfiles) {
       const Candidata: VideoEncoderConfig = {
         codec: Perfil, width: Ancho, height: Alto,
-        bitrate: TasaBits, framerate: Fps, avc: { format: 'avc' }
+        bitrate: TasaBits * 3, // Multiplicar tasa de bits para máxima nitidez y detalles
+        framerate: Fps, avc: { format: 'avc' }
       } as VideoEncoderConfig;
       const Soporte = await VideoEncoder.isConfigSupported(Candidata);
       if (Soporte.supported) { Configuracion = Candidata; break; }
@@ -89,6 +90,11 @@ export class GestorExportacion {
 
     // Guardar el estado de la previa para restaurarlo al finalizar
     const Escena = Contexto.Escena;
+    
+    // Limpiar pantalla: quitar selección, gizmos y esqueleto auxiliar
+    if (Escena.ControlTransformacion) Escena.ControlTransformacion.detach();
+    Contexto.Modelos.AlternarAyudante(false);
+    
     const TiempoPrevio = Contexto.Animacion.TiempoActual;
     const EstabaReproduciendo = Contexto.Animacion.Reproduciendo;
     Contexto.Animacion.Pausar();
@@ -219,6 +225,10 @@ export class GestorExportacion {
     const Duracion = Contexto.Animacion.Duracion;
     const Escena = Contexto.Escena;
 
+    // Limpiar pantalla: quitar selección, gizmos y esqueleto auxiliar
+    if (Escena.ControlTransformacion) Escena.ControlTransformacion.detach();
+    Contexto.Modelos.AlternarAyudante(false);
+
     Escena.EstablecerTamanoExportacion(Ancho, Alto);
     const Flujo = Escena.ObtenerLienzo().captureStream(Fps);
 
@@ -237,7 +247,7 @@ export class GestorExportacion {
     const TipoMime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
     const Grabadora = new MediaRecorder(Flujo, {
       mimeType: TipoMime,
-      videoBitsPerSecond: Math.min(45_000_000, Ancho * Alto * Fps * 0.14)
+      videoBitsPerSecond: Math.min(65_000_000, Ancho * Alto * Fps * 0.3) // Alto bitrate
     });
     const Fragmentos: Blob[] = [];
     Grabadora.ondataavailable = (Evento) => { if (Evento.data.size > 0) Fragmentos.push(Evento.data); };
