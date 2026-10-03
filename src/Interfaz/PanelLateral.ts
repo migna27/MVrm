@@ -742,10 +742,88 @@ export class PanelLateral {
     }, 'BotonPrimario');
 
     FilaVideo.append(BotonCargar, BotonProcesar);
+    
+    // UI Para Text-to-Motion
+    const ContenedorMDM = document.createElement('div');
+    ContenedorMDM.style.display = 'none';
+    ContenedorMDM.style.flexDirection = 'column';
+    ContenedorMDM.style.gap = '10px';
+    ContenedorMDM.style.marginTop = '15px';
+    
+    const InputPrompt = document.createElement('input');
+    InputPrompt.type = 'text';
+    InputPrompt.placeholder = 'Ej: "dar un salto", "agacharse", "dar un giro"';
+    InputPrompt.style.width = '100%';
+    InputPrompt.style.padding = '8px';
+    InputPrompt.style.background = '#222';
+    InputPrompt.style.border = '1px solid #444';
+    InputPrompt.style.color = 'white';
+    InputPrompt.style.borderRadius = '5px';
+    
+    const BotonGenerarMDM = this.Boton('✨ Sintetizar Animación', async () => {
+      if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo VRM.'); return; }
+      if (!InputPrompt.value.trim()) { Ctx.NotificarEstado('Escribe una acción primero.'); return; }
+      
+      BotonGenerarMDM.disabled = true;
+      BotonGenerarMDM.textContent = 'Generando...';
+      EtiquetaProgreso.textContent = 'Sintetizando...';
+      
+      IntervaloProgreso = setInterval(async () => {
+        try {
+          const s = await fetch('/api/tracker/status');
+          const txt = await s.text();
+          if (txt && EtiquetaProgreso) EtiquetaProgreso.textContent = txt;
+        } catch(e) {}
+      }, 500);
+
+      try {
+        const res = await fetch('/api/tracker/generate-mdm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: InputPrompt.value.trim() })
+        });
+        const data = await res.json();
+        
+        if (data.success && data.jsonUrl) {
+          const resJson = await fetch(data.jsonUrl);
+          const datosAnim = await resJson.json();
+          Ctx.Animacion.EliminarPistasPorGrupo('SeguimientoCuerpo');
+          Ctx.Animacion.AgregarPistas(datosAnim.Pistas);
+          const UltimoTiempo = Math.max(0, ...datosAnim.Pistas.flatMap((P: any) => P.Claves.map((C: any) => C.Tiempo)));
+          if (UltimoTiempo > Ctx.Animacion.Duracion) Ctx.Animacion.Duracion = Math.ceil(UltimoTiempo);
+          Ctx.NotificarEstado(`Animación generada: ${datosAnim.Pistas.length} pistas.`);
+          EtiquetaProgreso.textContent = 'Animación lista en la línea de tiempo.';
+        } else {
+          Ctx.NotificarEstado('Error al generar MDM.');
+          EtiquetaProgreso.textContent = 'Fallo en proceso.';
+        }
+      } catch(e) {
+        Ctx.NotificarEstado('Error de conexión MDM.');
+        EtiquetaProgreso.textContent = 'Error de conexión.';
+      } finally {
+        BotonGenerarMDM.disabled = false;
+        BotonGenerarMDM.textContent = '✨ Sintetizar Animación';
+        if (IntervaloProgreso) clearInterval(IntervaloProgreso);
+      }
+    }, 'BotonPrimario');
+    
+    ContenedorMDM.appendChild(InputPrompt);
+    ContenedorMDM.appendChild(BotonGenerarMDM);
+
+    SelectorMotor.addEventListener('change', () => {
+      const esMDM = SelectorMotor.value === 'mdm';
+      FilaVideo.style.display = esMDM ? 'none' : 'flex';
+      FilaCamara.style.display = esMDM ? 'none' : 'flex';
+      ContenedorMDM.style.display = esMDM ? 'flex' : 'none';
+      if (esMDM) EtiquetaProgreso.textContent = 'Escribe un prompt matemático.';
+      else EtiquetaProgreso.textContent = '';
+    });
+
     Cuerpo.appendChild(FilaVideo);
+    Cuerpo.appendChild(ContenedorMDM);
     Cuerpo.appendChild(EtiquetaProgreso);
 
-    this.Nota(Cuerpo, 'Cámara en vivo graba en la línea de tiempo usando el botón "Grabar a Timeline" de arriba. Procesar Video añade las pistas automáticamente al cargarlo.');
+    this.Nota(Cuerpo, 'Cámara en vivo graba en la línea de tiempo usando el botón "Grabar a Timeline" de arriba. Procesar Video o Sintetizar MDM añaden las pistas automáticamente.');
   }
 
   // -------- Escena y fondo (Etapa 4) --------

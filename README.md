@@ -1,9 +1,10 @@
-# Animador VRM (Experimental v a-0.0.7)
+# Animador VRM (Experimental v a-0.0.8)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (v a-0.0.7)
+## Características (v a-0.0.8)
 
+- **Motor Generativo Text-to-Motion (MDM):** IA heurística capaz de interpretar indicaciones en texto (como "saltar", "agacharse", "girar") y sintetizar curvas matemáticas de movimiento perfectas en el espacio 3D, resolviendo las limitaciones del traqueo de video plano.
 - **Motor RTMPose (Experimental):** Implementación preliminar de inferencia ONNX para el motor RTMPose.
 - **Corrección de Tracking con IA (Filtro EMA y Visibilidad):** Algoritmos avanzados de estabilización de postura y descarte inteligente de extremidades ocultas. ¡Lo que no se ve no se trackea, evitando roturas articulares!
 - **IA Holistic (Cuerpo y Manos):** Integración de MediaPipe Holistic desde Python. El modelo ahora es capaz de imitar no solo la postura del torso y brazos, sino la rotación de las muñecas y abrir/cerrar los puños.

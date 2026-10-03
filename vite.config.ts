@@ -121,6 +121,50 @@ function localAssetsPlugin() {
           return;
         }
 
+        // Generar animacion mediante MDM Text-to-Motion
+        if (req.url === '/api/tracker/generate-mdm' && req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk: any) => body += chunk.toString());
+          req.on('end', () => {
+            const data = JSON.parse(body);
+            const prompt = data.prompt || 'salto';
+            const outName = `mdm_${Date.now()}.json`;
+            const outDir = path.join(process.cwd(), 'user', 'animations');
+            if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+            const outPath = path.join(outDir, outName);
+
+            const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
+              ? './tracker/python_portable/python.exe' : 'python';
+
+            console.log(`[API] Generando MDM para prompt: ${prompt}`);
+            (global as any).trackerStatus = 'Iniciando generación MDM...';
+            
+            const proc = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', 'mdm', '--prompt', prompt, '--output', outPath], { cwd: process.cwd() });
+            
+            proc.stdout.on('data', (d: any) => {
+               const msg = d.toString();
+               if (msg.includes('[PROGRESS]') || msg.includes('[STATE]')) {
+                  (global as any).trackerStatus = msg.replace('[PROGRESS]', '').replace('[STATE]', '').trim();
+               }
+               console.log(`[PyMDM]: ${msg}`);
+            });
+            proc.stderr.on('data', (d: any) => console.error(`[PyMDM ERR]: ${d.toString()}`));
+            
+            proc.on('close', (code: any) => {
+              if (code === 0 && fs.existsSync(outPath)) {
+                (global as any).trackerStatus = '¡Proceso terminado!';
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, jsonUrl: `/user/animations/${outName}` }));
+              } else {
+                (global as any).trackerStatus = 'Error durante la generación MDM.';
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: false, error: 'Fallo en Python' }));
+              }
+            });
+          });
+          return;
+        }
+
         if (req.url === '/api/library' && req.method === 'GET') {
           const getFiles = (dir: string) => {
             const fullPath = path.join(process.cwd(), dir);
