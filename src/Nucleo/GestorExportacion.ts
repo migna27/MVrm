@@ -168,7 +168,8 @@ export class GestorExportacion {
       const Silencio = new Float32Array(MuestrasSilencio * Canales);
       const DatosSilencio = new AudioData({
         format: 'f32-planar', sampleRate: Frecuencia,
-        numberOfFrames: MuestrasSilencio, timestamp: 0, data: Silencio.buffer
+        numberOfFrames: MuestrasSilencio, numberOfChannels: Canales,
+        timestamp: 0, data: Silencio.buffer
       });
       CodificadorAudio.encode(DatosSilencio);
       DatosSilencio.close();
@@ -192,7 +193,7 @@ export class GestorExportacion {
       }
       const DatosAudio = new AudioData({
         format: 'f32-planar', sampleRate: Frecuencia,
-        numberOfFrames: Cantidad,
+        numberOfFrames: Cantidad, numberOfChannels: Canales,
         timestamp: Math.round((MarcaTemporal + (Base - InicioMuestra)) * 1_000_000 / Frecuencia),
         data: Datos.buffer
       });

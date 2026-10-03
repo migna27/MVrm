@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRMLoaderPlugin, VRM, VRMUtils } from '@pixiv/three-vrm';
-import { VRMAnimationLoaderPlugin, VRMAnimation } from '@pixiv/three-vrm-animation';
+import { VRMAnimationLoaderPlugin, VRMAnimation, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
 
 /** Lista de huesos humanoides VRM que se exponen para animar. */
 export const NOMBRES_HUESOS = [
@@ -55,7 +55,8 @@ export class GestorModelos {
 
     // Optimización: combinar mallas y quitar vértices innecesarios
     VRMUtils.removeUnnecessaryVertices(Gltf.scene);
-    VRMUtils.combineMeshes(Gltf.scene);
+    VRMUtils.combineSkeletons(Gltf.scene);
+    VRMUtils.combineMorphs(Vrm);
 
     Gltf.scene.traverse((Nodo) => {
       Nodo.frustumCulled = false; // Evita parpadeos al animar fuera de cuadro
@@ -89,7 +90,7 @@ export class GestorModelos {
     if (!Animaciones || Animaciones.length === 0) {
       throw new Error('El archivo .vrma no contiene animaciones.');
     }
-    return Animaciones[0].createAnimationClip(this.Vrm);
+    return createVRMAnimationClip(Animaciones[0], this.Vrm);
   }
 
   /** Carga un modelo GLB/GLTF/VRM para usarlo como fondo o utilería. */

@@ -244,7 +244,7 @@ export class GestorTracking {
           if (!Nodo) continue;
           const NombreHijo = [Entrada.Hijo, ...(Entrada.HijosAlternos ?? [])]
             .find((N) => Modelos.ObtenerNodoHueso(N) !== null);
-          const Hijo = NombreHijo ? Modelos.ObtenerNodoNuloSeguro(Modelos, NombreHijo) : null;
+          const Hijo = NombreHijo ? Modelos.ObtenerNodoHueso(NombreHijo) : null;
           if (!Hijo) continue;
 
           // Dirección actual del hueso en el mundo (con los padres ya aplicados)

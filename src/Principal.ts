@@ -13,7 +13,8 @@ import { GestorEfectos } from './Nucleo/GestorEfectos';
 import { GestorTracking } from './Nucleo/GestorTracking';
 import { GestorExportacion } from './Nucleo/GestorExportacion';
 import { ContextoAplicacion } from './Contexto';
-import { DatosProyecto, TipoParticulas } from './Tipos';
+import { DatosProyecto } from './Tipos';
+import { TipoParticulas } from './Nucleo/GestorEfectos';
 import { LineaTiempo } from './Interfaz/LineaTiempo';
 import { PanelLateral } from './Interfaz/PanelLateral';
 import {
