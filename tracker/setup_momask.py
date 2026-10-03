@@ -41,6 +41,25 @@ def main():
     
     repo_id = "geedog/momask-codes-models"
     
+    # 2. Clonar el repositorio fuente para tener la arquitectura
+    momask_code_dir = os.path.join(models_dir, 'momask_codes')
+    if not os.path.exists(momask_code_dir):
+        print_progress("Clonando código fuente de MoMask (EricGuo5513/momask-codes)...", 20)
+        subprocess.check_call(["git", "clone", "https://github.com/EricGuo5513/momask-codes.git", momask_code_dir])
+        
+        # Instalar dependencias adicionales de MoMask
+        print_progress("Instalando dependencias de texto para MoMask (spacy, clip)...", 25)
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "spacy", "scipy", "ftfy", "regex", "tqdm"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "git+https://github.com/openai/CLIP.git"])
+        try:
+            import spacy
+            if not spacy.util.is_package("en_core_web_sm"):
+                subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"])
+        except Exception as e:
+            print(f"[WARN] No se pudo descargar modelo SpaCy: {e}")
+            
+    print_progress("Preparando descarga de los pesos de la red neuronal...", 30)
+    
     files_to_download = [
         "t2m/rvq_nq6_dc512_nc512_noshare_qdp0.2/meta/mean.npy",
         "t2m/rvq_nq6_dc512_nc512_noshare_qdp0.2/meta/std.npy",
