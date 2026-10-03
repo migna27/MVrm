@@ -15,7 +15,6 @@ def run_mdm_generation(prompt, live=False, osc_client=None, fps_target=24):
     for b in bones:
         tracks_raw[b] = []
     tracks_raw['hips'] = [] # Raiz (Posicion global)
-    tracks_raw['hips_rot'] = [] # Rotacion global de la raiz
     
     total_frames = int(duration * fps_target)
     
@@ -71,14 +70,28 @@ def run_mdm_generation(prompt, live=False, osc_client=None, fps_target=24):
             root_rot = [0, t * math.pi * 2, 0] # Gira 360 grados en el eje Y
             rot_state['leftUpperArm'] = [0, 0, -0.4] # Abre un poco los brazos por inercia
             rot_state['rightUpperArm'] = [0, 0, 0.4]
+            rot_state['leftUpperLeg'] = [0.1, 0, 0]
+            rot_state['rightUpperLeg'] = [0.1, 0, 0]
+            
+        # 4. CORRER
+        elif "corre" in prompt or "andando" in prompt or "camin" in prompt:
+            cycle = (t * 4) * math.pi * 2 # 4 ciclos de carrera
+            root_pos[1] = abs(math.sin(cycle)) * 0.1 # Pequeño rebote
+            rot_state['leftUpperLeg'] = [math.sin(cycle) * 0.8, 0, 0]
+            rot_state['rightUpperLeg'] = [-math.sin(cycle) * 0.8, 0, 0]
+            rot_state['leftLowerLeg'] = [abs(math.sin(cycle - math.pi/4)) * -1.2, 0, 0]
+            rot_state['rightLowerLeg'] = [abs(math.sin(cycle + math.pi/4)) * -1.2, 0, 0]
+            rot_state['leftUpperArm'] = [-math.sin(cycle) * 0.8, 0, -0.2]
+            rot_state['rightUpperArm'] = [math.sin(cycle) * 0.8, 0, 0.2]
+            rot_state['leftLowerArm'] = [0, 0, -1.5] # Brazos flexionados
+            rot_state['rightLowerArm'] = [0, 0, 1.5]
             
         # Almacenar Keyframes
         for b in bones:
             tracks_raw[b].append({"Id": f"tr_{f}_{b}", "Tiempo": time_sec, "Valor": rot_state[b], "Tipo": "HuesoRotacion"})
             
         tracks_raw['hips'].append({"Id": f"tr_pos_{f}_hips", "Tiempo": time_sec, "Valor": root_pos, "Tipo": "HuesoPosicion"})
-        # La rotación del root se aplica a hips en VRM
-        tracks_raw['hips_rot'].append({"Id": f"tr_rot_{f}_hips", "Tiempo": time_sec, "Valor": root_rot, "Tipo": "HuesoRotacion"})
+        tracks_raw['hips'].append({"Id": f"tr_rot_{f}_hips", "Tiempo": time_sec, "Valor": root_rot, "Tipo": "HuesoRotacion"})
         
         if f % 5 == 0:
             print(f"[PROGRESS] {int((f / total_frames) * 100)}")

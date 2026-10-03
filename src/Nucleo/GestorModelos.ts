@@ -194,16 +194,23 @@ export class GestorModelos {
     return Nodo ? new THREE.Euler().setFromQuaternion(Nodo.quaternion, 'XYZ') : new THREE.Euler();
   }
 
-  /** Aplica una posición local a un hueso (pensado para la cadera). */
-  public EstablecerPosicionHueso(Nombre: string, Posicion: THREE.Vector3): void {
+  /** Aplica una posición local a un hueso de forma relativa a su pose de reposo (Delta). */
+  public EstablecerPosicionHueso(Nombre: string, Offset: THREE.Vector3): void {
     const Nodo = this.ObtenerNodoHueso(Nombre);
-    if (Nodo) Nodo.position.copy(Posicion);
+    const Reposo = this.EstadoReposo.get(Nombre);
+    if (Nodo && Reposo) {
+      Nodo.position.copy(Reposo.Posicion).add(Offset);
+    }
   }
 
-  /** Lee la posición local actual de un hueso. */
+  /** Lee el desplazamiento (offset) relativo a la pose de reposo. */
   public ObtenerPosicionHueso(Nombre: string): THREE.Vector3 {
     const Nodo = this.ObtenerNodoHueso(Nombre);
-    return Nodo ? Nodo.position.clone() : new THREE.Vector3();
+    const Reposo = this.EstadoReposo.get(Nombre);
+    if (Nodo && Reposo) {
+      return Nodo.position.clone().sub(Reposo.Posicion);
+    }
+    return new THREE.Vector3();
   }
 
   /** Lista las expresiones faciales disponibles en el modelo. */
