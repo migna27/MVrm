@@ -594,7 +594,7 @@ export class PanelLateral {
     const Etiqueta = document.createElement('label');
     Etiqueta.className = 'EtiquetaCompacta';
     const Selector = document.createElement('select');
-    for (const Tipo of ['Ninguno', 'Nieve', 'Lluvia', 'Petalos', 'Chispas']) {
+    for (const Tipo of ['Ninguno', 'Nieve', 'Lluvia', 'Petalos', 'Chispas', 'Burbujas', 'Magia']) {
       const O = document.createElement('option');
       O.value = Tipo; O.textContent = Tipo;
       Selector.appendChild(O);

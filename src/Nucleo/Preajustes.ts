@@ -221,5 +221,56 @@ export const CATALOGO_PREAJUSTES: PreajusteAnimacion[] = [
       PistaExpresion('surprised', I, [[0, [0]], [0.35, [1]], [2, [1]]]),
       PistaExpresion('aa', I, [[0, [0]], [0.35, [0.6]], [2, [0.6]]])
     ]
+  },
+  {
+    Nombre: 'Pose de combate',
+    Descripcion: 'Guardia alta, puños listos.',
+    Duracion: 1,
+    Generar: (I) => [
+      PistaHueso('leftUpperArm', I, [[0, [-0.5, 0.4, -0.6]]]),
+      PistaHueso('rightUpperArm', I, [[0, [-0.5, -0.4, 0.6]]]),
+      PistaHueso('leftLowerArm', I, [[0, [0, -1.8, 0]]]),
+      PistaHueso('rightLowerArm', I, [[0, [0, 1.8, 0]]]),
+      PistaHueso('leftHand', I, [[0, [0.2, 0, 0]]]),
+      PistaHueso('rightHand', I, [[0, [0.2, 0, 0]]]),
+      PistaHueso('leftUpperLeg', I, [[0, [-0.2, 0, 0.2]]]),
+      PistaHueso('rightUpperLeg', I, [[0, [-0.2, 0, -0.2]]]),
+      PistaHueso('spine', I, [[0, [0.1, 0.2, 0]]])
+    ]
+  },
+  {
+    Nombre: 'Pose sentado',
+    Descripcion: 'Piernas flexionadas a 90 grados como en una silla.',
+    Duracion: 1,
+    Generar: (I) => [
+      PistaHueso('leftUpperLeg', I, [[0, [-1.57, 0, 0]]]),
+      PistaHueso('rightUpperLeg', I, [[0, [-1.57, 0, 0]]]),
+      PistaHueso('leftLowerLeg', I, [[0, [1.57, 0, 0]]]),
+      PistaHueso('rightLowerLeg', I, [[0, [1.57, 0, 0]]]),
+      PistaPosicion('hips', I, [[0, [0, -0.6, 0]]])
+    ]
+  },
+  {
+    Nombre: 'Pose victoria',
+    Descripcion: 'Brazo levantado en señal de victoria.',
+    Duracion: 1,
+    Generar: (I) => [
+      PistaHueso('rightUpperArm', I, [[0, [0, 0, -2.8]]]),
+      PistaHueso('rightLowerArm', I, [[0, [0, 0.2, 0]]]),
+      PistaHueso('leftUpperArm', I, [[0, [0, 0, -1.2]]]),
+      PistaExpresion('happy', I, [[0, [1]]])
+    ]
+  },
+  {
+    Nombre: 'Pensando',
+    Descripcion: 'Mano en la barbilla y mirada pensativa.',
+    Duracion: 1,
+    Generar: (I) => [
+      PistaHueso('rightUpperArm', I, [[0, [0, 0.4, -0.2]]]),
+      PistaHueso('rightLowerArm', I, [[0, [0, 2.2, 0]]]),
+      PistaHueso('leftUpperArm', I, [[0, [0, 0.8, -1.2]]]),
+      PistaHueso('leftLowerArm', I, [[0, [0, -1.5, 0]]]),
+      PistaHueso('neck', I, [[0, [0.1, 0.2, -0.1]]])
+    ]
   }
 ];

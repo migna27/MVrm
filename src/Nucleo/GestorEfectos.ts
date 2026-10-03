@@ -6,7 +6,7 @@
 
 import * as THREE from 'three';
 
-export type TipoParticulas = 'Ninguno' | 'Nieve' | 'Lluvia' | 'Petalos' | 'Chispas';
+export type TipoParticulas = 'Ninguno' | 'Nieve' | 'Lluvia' | 'Petalos' | 'Chispas' | 'Burbujas' | 'Magia';
 
 interface ConfiguracionParticulas {
   Color: number;
@@ -19,7 +19,9 @@ const CONFIGURACIONES: Record<Exclude<TipoParticulas, 'Ninguno'>, ConfiguracionP
   Nieve:   { Color: 0xffffff, Tamano: 0.10, VelocidadY: [-0.9, -0.4], Vaiven: 0.35 },
   Lluvia:  { Color: 0x9fc3ff, Tamano: 0.05, VelocidadY: [-14, -10],   Vaiven: 0.0 },
   Petalos: { Color: 0xffb7d5, Tamano: 0.12, VelocidadY: [-0.8, -0.5], Vaiven: 0.55 },
-  Chispas: { Color: 0xffd977, Tamano: 0.08, VelocidadY: [0.6, 1.6],   Vaiven: 0.25 }
+  Chispas: { Color: 0xffd977, Tamano: 0.08, VelocidadY: [0.6, 1.6],   Vaiven: 0.25 },
+  Burbujas:{ Color: 0xccffff, Tamano: 0.18, VelocidadY: [0.3, 0.8],   Vaiven: 0.15 },
+  Magia:   { Color: 0xd88cff, Tamano: 0.06, VelocidadY: [-0.1, 0.3],  Vaiven: 0.60 }
 };
 
 // Volumen donde viven las partículas (se reciclan al salir)
