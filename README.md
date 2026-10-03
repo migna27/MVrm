@@ -17,19 +17,16 @@ Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un 
 - **Exportación 4K:** Sistema de renderizado secuencial a formato MP4 (H.264+AAC) o WebM que asegura tasa de fotogramas constante sin importar el rendimiento del hardware.
 - *(Nota de versión)* **Seguimiento por video (Video Tracking):** Extracción de poses a partir de video mediante MediaPipe (temporalmente oculto en esta versión experimental).
 
-## Requisitos de Entorno
-
-El proyecto corre de forma local a través de Vite (servidor web) y requiere Node.js para resoluciones de API y hospedaje de archivos temporales.
-
 ## Instalación Fácil (Windows)
 
-Para los usuarios finales en Windows que no cuenten con experiencia técnica ni instaladores en su equipo, el repositorio incluye un iniciador automático de "Cero Instalación":
+Para utilizar este proyecto en Windows **no necesitas instalar Node.js ni tener experiencia técnica**. El repositorio incluye un entorno portable automatizado:
 
-1. Da doble clic en el archivo `iniciar.bat`.
-2. El script detectará si hace falta Node.js y las librerías. De ser así, descargará e instalará automáticamente una versión portable y privada del entorno en la propia carpeta del proyecto.
-3. El navegador predeterminado se abrirá por su cuenta (usualmente en la dirección `http://localhost:5173`).
+1. **Clona o descarga** este repositorio en tu computadora y extrae la carpeta.
+2. Da doble clic en el archivo `iniciar.bat`.
+3. La primera vez, el script descargará de forma silenciosa un motor interno (Node.js portable) e instalará las librerías necesarias.
+4. El navegador predeterminado se abrirá automáticamente con el estudio de animación listo para usarse.
 
-*Para cerrar el entorno, simplemente cierra la ventana de la consola (símbolo del sistema).*
+*Para cerrar el entorno, simplemente cierra la ventana negra de la consola.*
 
 ## Ejecución Manual (Desarrolladores)
 
