@@ -8,13 +8,13 @@ import onnxruntime as ort
 def ensure_rtmpose_models():
     models_dir = os.path.join(os.path.dirname(__file__), '..', 'models')
     os.makedirs(models_dir, exist_ok=True)
-    onnx_path = os.path.join(models_dir, "rtmpose-m_simcc-body7_pt-body7_420e-256x192-e48f03d0_20230504.onnx")
+    onnx_path = os.path.join(models_dir, "rtmpose-m.onnx")
     
     if not os.path.exists(onnx_path):
-        print("[INFO] Descargando modelo RTMPose ONNX...")
-        # Descarga desde un repo de HuggingFace que contiene pesos ONNX de RTMPose
+        print("[INFO] Descargando modelo RTMPose ONNX desde bukuroo/RTMPose-ONNX...")
+        # Descarga desde un repo público de HuggingFace que contiene pesos ONNX de RTMPose
         onnx_path = huggingface_hub.hf_hub_download(
-            repo_id="TheMistoAI/rtmpose-onnx", 
+            repo_id="bukuroo/RTMPose-ONNX", 
             filename="rtmpose-m.onnx",
             local_dir=models_dir
         )
