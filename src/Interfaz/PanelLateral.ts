@@ -645,7 +645,11 @@ export class PanelLateral {
       }
     }, 'BotonPrimario');
     
-    FilaCamara.append(BotonCamara);
+    const BotonMovil = this.Boton('📱 Cámara Móvil (Próximamente)', () => {
+      Ctx.NotificarEstado('¡Pronto! Podrás usar la cámara de tu celular escaneando un código QR vía IP local (UDP/TCP/HTTP).');
+    });
+    
+    FilaCamara.append(BotonCamara, BotonMovil);
     Cuerpo.appendChild(FilaCamara);
 
     // --- OPCIÓN B: VIDEO PREGRABADO ---

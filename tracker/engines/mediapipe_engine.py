@@ -16,6 +16,12 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
         cap = cv2.VideoCapture(source, cv2.CAP_DSHOW)
     else:
         cap = cv2.VideoCapture(source)
+        
+    # Forzar la resolución máxima de la webcam para detectar la cara y dedos correctamente
+    if live:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        
     if not cap.isOpened():
         print(f"[ERROR] No se pudo abrir la cámara o video: {source}")
         return {}, 0
@@ -96,7 +102,13 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                     r_hand_angles = calculate_hand_angles(results.right_hand_landmarks.landmark, is_right=True)
                     angles.update(r_hand_angles)
                 
-                if angles or positions:
+                # Cara (Expresiones)
+                blendshapes = {}
+                if results.face_landmarks:
+                    from utils.math_utils import calculate_face_blendshapes
+                    blendshapes = calculate_face_blendshapes(results.face_landmarks)
+                
+                if angles or positions or blendshapes:
                     if live and osc_client:
                         from scipy.spatial.transform import Rotation
                         
@@ -120,6 +132,10 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                             hx, hy, hz = positions['hips']
                             osc_client.send_message("/VMC/Ext/Root/Pos", ["root", float(hx), float(hy), float(hz), 0.0, 0.0, 0.0, 1.0])
                             
+                        # Enviar Blendshapes
+                        for blend_name, val in blendshapes.items():
+                            osc_client.send_message("/VMC/Ext/Blend/Val", [blend_name, float(val)])
+                            
                         osc_client.send_message("/VMC/Ext/Blend/Apply", [])
                         
                     else:
@@ -129,6 +145,9 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                         for bone, pos in positions.items():
                             if bone not in tracks_raw: tracks_raw[bone] = []
                             tracks_raw[bone].append({"Id": f"tr_pos_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": pos, "Tipo": "HuesoPosicion"})
+                        for blend_name, val in blendshapes.items():
+                            if blend_name not in tracks_raw: tracks_raw[blend_name] = []
+                            tracks_raw[blend_name].append({"Id": f"tr_exp_{frame_idx}_{blend_name}", "Tiempo": time_sec, "Valor": [val], "Tipo": "Expresion"})
                 
                 if live:
                     cv2.imshow("Animador VRM - Preview Tracking", image_bgr)
