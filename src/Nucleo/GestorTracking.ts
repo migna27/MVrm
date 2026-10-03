@@ -114,6 +114,15 @@ export class GestorTracking {
       Video.src = Url;
       Video.muted = true;
       Video.playsInline = true;
+      
+      // CRÍTICO: Añadir al DOM para que el navegador dispare requestVideoFrameCallback y decodifique
+      Video.style.position = 'absolute';
+      Video.style.opacity = '0';
+      Video.style.pointerEvents = 'none';
+      Video.style.width = '10px';
+      Video.style.height = '10px';
+      document.body.appendChild(Video);
+
       await new Promise<void>((Resolver, Rechazar) => {
         Video.onloadedmetadata = () => Resolver();
         Video.onerror = () => Rechazar(new Error('No se pudo leer el video.'));
@@ -177,6 +186,9 @@ export class GestorTracking {
       return Pistas;
     } finally {
       this.Procesando = false;
+      // Limpiar video del DOM
+      const VideosOcultos = document.querySelectorAll('video[style*="opacity: 0"]');
+      VideosOcultos.forEach(V => V.remove());
     }
   }
 
