@@ -17,6 +17,7 @@ import { DatosProyecto } from './Tipos';
 import { TipoParticulas } from './Nucleo/GestorEfectos';
 import { LineaTiempo } from './Interfaz/LineaTiempo';
 import { PanelLateral } from './Interfaz/PanelLateral';
+import { ModalExportacion } from './Interfaz/ModalExportacion';
 import {
   FormatearTiempo, SeleccionarArchivo, LeerArchivoTexto,
   DescargarTexto, Limitar
@@ -53,6 +54,7 @@ const Panel = new PanelLateral(
   Contexto
 );
 const Linea = new LineaTiempo(document.getElementById('LienzoLineaTiempo') as HTMLCanvasElement, Contexto);
+const Modal = new ModalExportacion(Contexto);
 
 Animacion.AlCambiarPistas = () => Linea.Dibujar();
 

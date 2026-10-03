@@ -23,8 +23,6 @@ export class PanelLateral {
   private EtiquetaAudio!: HTMLElement;
   private BarraSeguimiento!: HTMLElement;
   private TextoSeguimiento!: HTMLElement;
-  private BarraExportacion!: HTMLElement;
-  private TextoExportacion!: HTMLElement;
   private ArchivoVideo: File | null = null;
 
   constructor(private RaizIzq: HTMLElement, private RaizDer: HTMLElement, private Contexto: ContextoAplicacion) {
@@ -126,7 +124,6 @@ export class PanelLateral {
     // Panel Derecho (Inspector / Propiedades)
     this.ConstruirSeccionModelo();
     this.ConstruirSeccionExpresiones();
-    this.ConstruirSeccionExportacion();
 
     // Panel Izquierdo (Media / Assets / Efectos)
     this.ConstruirSeccionBiblioteca();
@@ -554,91 +551,6 @@ export class PanelLateral {
     Fila2.appendChild(Etiqueta);
     Cuerpo.appendChild(Fila2);
     this.Nota(Cuerpo, 'Valores positivos retrasan el audio; negativos lo adelantan.');
-  }
-
-  // -------- Exportación (Etapa 5) --------
-  private ConstruirSeccionExportacion(): void {
-    const Cuerpo = this.Seccion(this.RaizDer, 'Exportar video', true);
-    const Ctx = this.Contexto;
-
-    const Fila = document.createElement('div');
-    Fila.className = 'FilaControles';
-
-    const EtiquetaRes = document.createElement('label');
-    EtiquetaRes.className = 'EtiquetaCompacta';
-    const SelectorRes = document.createElement('select');
-    RESOLUCIONES_EXPORTACION.forEach((R, I) => {
-      const O = document.createElement('option');
-      O.value = String(I);
-      O.textContent = `${R.Etiqueta} (${R.Ancho}×${R.Alto})`;
-      if (I === 1) O.selected = true;
-      SelectorRes.appendChild(O);
-    });
-    EtiquetaRes.append(document.createTextNode('Resolución '), SelectorRes);
-
-    const EtiquetaFps = document.createElement('label');
-    EtiquetaFps.className = 'EtiquetaCompacta';
-    const SelectorFps = document.createElement('select');
-    for (const F of [24, 30, 60]) {
-      const O = document.createElement('option');
-      O.value = String(F); O.textContent = `${F} fps`;
-      if (F === 30) O.selected = true;
-      SelectorFps.appendChild(O);
-    }
-    EtiquetaFps.append(document.createTextNode('Velocidad '), SelectorFps);
-
-    const EtiquetaFormato = document.createElement('label');
-    EtiquetaFormato.className = 'EtiquetaCompacta';
-    const SelectorFormato = document.createElement('select');
-    for (const [Valor, Texto] of [['mp4', 'MP4 (H.264 + AAC)'], ['webm', 'WebM (respaldo, tiempo real)']]) {
-      const O = document.createElement('option');
-      O.value = Valor; O.textContent = Texto;
-      SelectorFormato.appendChild(O);
-    }
-    EtiquetaFormato.append(document.createTextNode('Formato '), SelectorFormato);
-
-    const CasillaAudio = this.Casilla(Fila, 'Incluir audio', true, () => {});
-    Fila.prepend(EtiquetaRes, EtiquetaFps, EtiquetaFormato);
-    Cuerpo.appendChild(Fila);
-
-    const BotonExportar = this.Boton('⬇ Exportar video', async () => {
-      if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo VRM.'); return; }
-      const Res = RESOLUCIONES_EXPORTACION[parseInt(SelectorRes.value, 10)];
-      const Opciones: OpcionesExportacion = {
-        Ancho: Res.Ancho, Alto: Res.Alto,
-        Fps: parseInt(SelectorFps.value, 10),
-        Formato: SelectorFormato.value as 'mp4' | 'webm',
-        IncluirAudio: CasillaAudio.checked
-      };
-      BotonExportar.disabled = true;
-      BotonCancelar.disabled = false;
-      try {
-        await Ctx.Exportador.Exportar(Opciones, Ctx, (Fraccion, Mensaje) => {
-          this.BarraExportacion.style.width = `${Math.round(Fraccion * 100)}%`;
-          this.TextoExportacion.textContent = Mensaje;
-        });
-        Ctx.NotificarEstado('Video exportado correctamente.');
-      } catch (E) {
-        Ctx.NotificarEstado((E as Error).message);
-        this.TextoExportacion.textContent = (E as Error).message;
-      } finally {
-        BotonExportar.disabled = false;
-        BotonCancelar.disabled = true;
-      }
-    }, 'BotonPrimario');
-
-    const BotonCancelar = this.Boton('Cancelar', () => Ctx.Exportador.CancelarExportacion(), 'BotonPeligro');
-    BotonCancelar.disabled = true;
-
-    const Fila2 = document.createElement('div');
-    Fila2.className = 'FilaControles';
-    Fila2.append(BotonExportar, BotonCancelar);
-    Cuerpo.appendChild(Fila2);
-
-    const { Barra, Texto } = this.CrearBarraProgreso(Cuerpo);
-    this.BarraExportacion = Barra;
-    this.TextoExportacion = Texto;
-    this.Nota(Cuerpo, 'La exportación MP4 renderiza cuadro a cuadro con paso fijo: la calidad final no depende del rendimiento de la previa. 4K puede tardar varios minutos.');
   }
 
   /** Refresca las partes dinámicas tras cargar proyecto o modelo. */

@@ -195,3 +195,31 @@ input[type="checkbox"] { accent-color: var(--ColorAcento); }
 .PanelDesplazable::-webkit-scrollbar-thumb, #ControlesTransporte::-webkit-scrollbar-thumb {
   background: var(--ColorBorde); border-radius: 4px;
 }
+
+/* ---------- Modal Exportación ---------- */
+.OverlayModal {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(16, 18, 24, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.VentanaModal {
+  background: var(--ColorPanel);
+  border: 1px solid var(--ColorBorde);
+  border-radius: 10px;
+  width: 420px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+  display: flex; flex-direction: column;
+}
+.CabeceraModal {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ColorBorde);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.CabeceraModal h2 { margin: 0; font-size: 15px; color: var(--ColorTexto); font-weight: 600; }
+.BotonCerrar { 
+  background: transparent; border: none; font-size: 20px; 
+  color: var(--ColorTextoTenue); padding: 0; line-height: 1; cursor: pointer;
+}
+.BotonCerrar:hover { color: #fff; }
+.CuerpoModal { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
