@@ -19,34 +19,34 @@ def align_vectors(v_rest, v_obs):
     r = Rotation.from_rotvec(axis * angle)
     return r.as_euler('xyz').tolist()
 
-def calculate_full_body_angles(landmarks_dict):
+def calculate_full_body_angles(landmarks):
     """
     Convierte landmarks a Euler Angles resolviendo la cinemática directa (Forward Kinematics).
-    Se mapea el espacio de MediaPipe a un espacio compatible con Unity/VRM (Y-Up, X-Right).
+    Aplica verificación de visibilidad (lo que no se ve no se trackea).
     """
     angles = {}
     positions = {}
     
-    # MP coords: X=Right, Y=Down, Z=Away from camera
-    # Unity coords: X=Right, Y=Up, Z=Forward
-    def to_unity(pt):
-        # Invertimos Y para que Arriba sea +Y. 
-        # Invertimos Z para profundidad (depende de cómo queramos que reaccione VMC, usualmente -Z o +Z, probaremos +Z).
-        return np.array([pt[0], -pt[1], pt[2]])
+    # Umbral de visibilidad
+    VISIBILITY_THRESHOLD = 0.5
+    
+    def pt(idx):
+        lm = landmarks[idx]
+        return np.array([lm.x, -lm.y, lm.z]), lm.visibility
         
-    ls = to_unity(landmarks_dict['ls'])
-    rs = to_unity(landmarks_dict['rs'])
-    le = to_unity(landmarks_dict['le'])
-    re = to_unity(landmarks_dict['re'])
-    lw = to_unity(landmarks_dict['lw'])
-    rw = to_unity(landmarks_dict['rw'])
-    lh = to_unity(landmarks_dict['lh'])
-    rh = to_unity(landmarks_dict['rh'])
-    lk = to_unity(landmarks_dict['lk'])
-    rk = to_unity(landmarks_dict['rk'])
-    la = to_unity(landmarks_dict['la'])
-    ra = to_unity(landmarks_dict['ra'])
-    nose = to_unity(landmarks_dict['nose'])
+    ls, ls_v = pt(11)
+    rs, rs_v = pt(12)
+    le, le_v = pt(13)
+    re, re_v = pt(14)
+    lw, lw_v = pt(15)
+    rw, rw_v = pt(16)
+    lh, lh_v = pt(23)
+    rh, rh_v = pt(24)
+    lk, lk_v = pt(25)
+    rk, rk_v = pt(26)
+    la, la_v = pt(27)
+    ra, ra_v = pt(28)
+    nose, nose_v = pt(0)
     
     hips_mid = (lh + rh) / 2.0
     shoulders_mid = (ls + rs) / 2.0
@@ -55,33 +55,37 @@ def calculate_full_body_angles(landmarks_dict):
     spine_obs = shoulders_mid - hips_mid
     head_obs = nose - shoulders_mid
     
-    l_arm_obs = le - ls
-    l_forearm_obs = lw - le
-    r_arm_obs = re - rs
-    r_forearm_obs = rw - re
+    # 3. Calcular Rotaciones alineando el vector de reposo con el observado
+    # Espalda y cabeza (asumimos que casi siempre son visibles)
+    if ls_v > 0.3 and rs_v > 0.3 and lh_v > 0.3 and rh_v > 0.3:
+        angles['spine'] = align_vectors(np.array([0, 1, 0]), spine_obs)
+    if nose_v > 0.3:
+        angles['head'] = align_vectors(np.array([0, 1, 0]), head_obs)
     
-    l_leg_obs = lk - lh
-    l_calf_obs = la - lk
-    r_leg_obs = rk - rh
-    r_calf_obs = ra - rk
-    
-    # 3. Calcular Rotaciones alineando el vector de reposo (T-Pose) con el observado
-    # En VRM (Unity): Cabeza/Espalda apuntan en +Y, Piernas en -Y, Brazo Izq en +X, Brazo Der en -X
-    angles['spine'] = align_vectors(np.array([0, 1, 0]), spine_obs)
-    angles['head'] = align_vectors(np.array([0, 1, 0]), head_obs)
-    
-    angles['leftUpperArm'] = align_vectors(np.array([1, 0, 0]), l_arm_obs)
-    angles['leftLowerArm'] = align_vectors(np.array([1, 0, 0]), l_forearm_obs)
-    
-    angles['rightUpperArm'] = align_vectors(np.array([-1, 0, 0]), r_arm_obs)
-    angles['rightLowerArm'] = align_vectors(np.array([-1, 0, 0]), r_forearm_obs)
-    
-    angles['leftUpperLeg'] = align_vectors(np.array([0, -1, 0]), l_leg_obs)
-    angles['leftLowerLeg'] = align_vectors(np.array([0, -1, 0]), l_calf_obs)
-    
-    angles['rightUpperLeg'] = align_vectors(np.array([0, -1, 0]), r_leg_obs)
-    angles['rightLowerLeg'] = align_vectors(np.array([0, -1, 0]), r_calf_obs)
-    
+    # Brazo Izquierdo
+    if ls_v > VISIBILITY_THRESHOLD and le_v > VISIBILITY_THRESHOLD:
+        angles['leftUpperArm'] = align_vectors(np.array([1, 0, 0]), le - ls)
+        if lw_v > VISIBILITY_THRESHOLD:
+            angles['leftLowerArm'] = align_vectors(np.array([1, 0, 0]), lw - le)
+            
+    # Brazo Derecho
+    if rs_v > VISIBILITY_THRESHOLD and re_v > VISIBILITY_THRESHOLD:
+        angles['rightUpperArm'] = align_vectors(np.array([-1, 0, 0]), re - rs)
+        if rw_v > VISIBILITY_THRESHOLD:
+            angles['rightLowerArm'] = align_vectors(np.array([-1, 0, 0]), rw - re)
+            
+    # Pierna Izquierda
+    if lh_v > VISIBILITY_THRESHOLD and lk_v > VISIBILITY_THRESHOLD:
+        angles['leftUpperLeg'] = align_vectors(np.array([0, -1, 0]), lk - lh)
+        if la_v > VISIBILITY_THRESHOLD:
+            angles['leftLowerLeg'] = align_vectors(np.array([0, -1, 0]), la - lk)
+            
+    # Pierna Derecha
+    if rh_v > VISIBILITY_THRESHOLD and rk_v > VISIBILITY_THRESHOLD:
+        angles['rightUpperLeg'] = align_vectors(np.array([0, -1, 0]), rk - rh)
+        if ra_v > VISIBILITY_THRESHOLD:
+            angles['rightLowerLeg'] = align_vectors(np.array([0, -1, 0]), ra - rk)
+            
     return angles, positions
 
 def apply_anti_clipping(angles, l_wrist, r_wrist, l_shoulder, r_shoulder):

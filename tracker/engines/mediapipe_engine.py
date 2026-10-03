@@ -25,6 +25,7 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
     frame_interval = max(1, int(video_fps / fps_target))
     
     tracks_raw = {}
+    live_angle_history = {}
     frame_idx = 0
     
     print("[INFO] Iniciando captura. Presiona ESC en la ventana de preview para salir.")
@@ -69,24 +70,22 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
 
                 angles = {}
                 positions = {}
+                
                 # Postura (Cuerpo)
                 if results.pose_world_landmarks:
-                    lms = results.pose_world_landmarks.landmark
-                    def pt(idx): return np.array([lms[idx].x, lms[idx].y, lms[idx].z])
-                    
-                    landmarks_dict = {
-                        'ls': pt(11), 'rs': pt(12),
-                        'le': pt(13), 're': pt(14),
-                        'lw': pt(15), 'rw': pt(16),
-                        'lh': pt(23), 'rh': pt(24),
-                        'lk': pt(25), 'rk': pt(26),
-                        'la': pt(27), 'ra': pt(28),
-                        'nose': pt(0)
-                    }
-                    
                     from utils.math_utils import calculate_full_body_angles, apply_anti_clipping
-                    angles, positions = calculate_full_body_angles(landmarks_dict)
-                    angles = apply_anti_clipping(angles, landmarks_dict['lw'], landmarks_dict['rw'], landmarks_dict['ls'], landmarks_dict['rs'])
+                    # Pasamos directamente el array de landmarks para evaluar visibilidad
+                    b_angles, b_positions = calculate_full_body_angles(results.pose_world_landmarks.landmark)
+                    angles.update(b_angles)
+                    positions.update(b_positions)
+                    
+                    # El anti clipping lo aplicamos solo a las manos si están visibles
+                    lms = results.pose_world_landmarks.landmark
+                    lw = np.array([lms[15].x, -lms[15].y, lms[15].z])
+                    rw = np.array([lms[16].x, -lms[16].y, lms[16].z])
+                    ls = np.array([lms[11].x, -lms[11].y, lms[11].z])
+                    rs = np.array([lms[12].x, -lms[12].y, lms[12].z])
+                    angles = apply_anti_clipping(angles, lw, rw, ls, rs)
                     
                 # Manos
                 from utils.math_utils import calculate_hand_angles
@@ -100,9 +99,18 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                 if angles or positions:
                     if live and osc_client:
                         from scipy.spatial.transform import Rotation
+                        
+                        # Filtro Exponencial (EMA) para suavizar y verificar errores
+                        ALPHA = 0.4
+                        
                         for bone, rot in angles.items():
+                            if bone not in live_angle_history:
+                                live_angle_history[bone] = np.array(rot)
+                            else:
+                                live_angle_history[bone] = ALPHA * np.array(rot) + (1.0 - ALPHA) * live_angle_history[bone]
+                                
                             try:
-                                r = Rotation.from_euler('xyz', rot)
+                                r = Rotation.from_euler('xyz', live_angle_history[bone].tolist())
                                 qx, qy, qz, qw = r.as_quat()
                                 osc_client.send_message("/VMC/Ext/Bone/Pos", [bone, 0.0, 0.0, 0.0, float(qx), float(qy), float(qz), float(qw)])
                             except Exception as e:
