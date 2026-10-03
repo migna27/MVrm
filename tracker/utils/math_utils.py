@@ -64,16 +64,17 @@ def calculate_full_body_angles(landmarks):
     rear, rear_v = pt(8)
     
     if lear_v > 0.3 and rear_v > 0.3 and nose_v > 0.3:
-        # X: Izquierda a Derecha (Unity +X es Derecha)
-        x_axis = rear - lear 
+        # El espacio base es: +X = Derecha de la pantalla (Izquierda del personaje), +Y = Arriba, +Z = Lejos de la cámara
+        # El eje +X observado es desde la oreja derecha hacia la oreja izquierda
+        x_axis = lear - rear 
         x_axis /= np.linalg.norm(x_axis)
         
-        # Z: Hacia adelante (Desde el centro de las orejas hacia la nariz)
+        # El eje +Z observado (lejos de la cámara) es desde la nariz hacia el centro de las orejas
         head_mid = (lear + rear) / 2.0
-        z_axis = nose - head_mid
+        z_axis = head_mid - nose
         z_axis /= np.linalg.norm(z_axis)
         
-        # Y: Hacia arriba (Producto cruz de Z y X)
+        # El eje +Y observado (arriba) es el producto cruz Z x X
         y_axis = np.cross(z_axis, x_axis)
         y_axis /= np.linalg.norm(y_axis)
         
