@@ -108,9 +108,9 @@ def run_rtmpose_tracking(source, live=False, osc_client=None, fps_target=24):
         
         # Preprocesamiento ImageNet
         input_data = resized.astype(np.float32) / 255.0
-        input_data = (input_data - np.array([0.485, 0.456, 0.406])) / np.array([0.229, 0.224, 0.225])
+        input_data = (input_data - np.array([0.485, 0.456, 0.406], dtype=np.float32)) / np.array([0.229, 0.224, 0.225], dtype=np.float32)
         input_data = input_data.transpose(2, 0, 1) # HWC a CHW
-        input_data = np.expand_dims(input_data, 0) # Añadir batch
+        input_data = np.expand_dims(input_data, 0).astype(np.float32) # Añadir batch y asegurar float32
         
         # Inferencia
         start_t = time.time()
