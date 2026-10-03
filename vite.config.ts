@@ -28,10 +28,13 @@ function localAssetsPlugin() {
 
           console.log('[API] Iniciando Motor Python (Live OSC)...');
           pythonTrackerProcess = spawn(pythonExe, ['tracker/main.py', '--engine', 'mediapipe', '--live', '--osc-port', '39539'], {
-             cwd: process.cwd(),
-             stdio: 'inherit'
+             cwd: process.cwd()
           });
           
+          pythonTrackerProcess.stdout?.on('data', (data) => console.log(`[Python]: ${data.toString()}`));
+          pythonTrackerProcess.stderr?.on('data', (data) => console.error(`[Python ERROR]: ${data.toString()}`));
+          pythonTrackerProcess.on('close', (code) => console.log(`[Python] Proceso terminado con código ${code}`));
+
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({ success: true }));
           return;
