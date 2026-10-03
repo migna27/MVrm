@@ -72,12 +72,12 @@ def main():
         tracks_raw, duration = run_mediapipe_tracking(inp, live=args.live, osc_client=osc_client)
         
     elif args.engine == 'rtmpose':
-        # RTMPose en vivo es posible pero pesado, por ahora stubs
-        if not args.input:
-            print("[ERROR] El motor rtmpose requiere --input")
+        inp = args.input if args.input else ("0" if args.live else None)
+        if inp is None:
+            print("[ERROR] El motor rtmpose requiere --input (o usa --live)")
             sys.exit(1)
         from engines.rtmpose_engine import run_rtmpose_tracking
-        tracks_raw, duration = run_rtmpose_tracking(args.input)
+        tracks_raw, duration = run_rtmpose_tracking(inp, live=args.live, osc_client=osc_client)
         
     elif args.engine == 'mdm':
         if not args.prompt:
