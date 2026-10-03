@@ -606,7 +606,7 @@ export class PanelLateral {
     let EstadoCamara = false;
     const BotonCamara = this.Boton('📷 Activar Cámara en vivo', async () => {
       if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga un modelo primero.'); return; }
-      if (SelectorMotor.value !== 'mediapipe') {
+      if (SelectorMotor.value !== 'mediapipe' && SelectorMotor.value !== 'rtmpose') {
         Ctx.NotificarEstado('Este motor aún no está disponible para cámara en vivo.'); return;
       }
 
