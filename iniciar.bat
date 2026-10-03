@@ -25,7 +25,7 @@ if exist "%NODE_EXE%" (
 
 echo [AVISO] Preparando motor interno por primera vez...
 echo         Esto no instalara nada en tu computadora ni requiere permisos de administrador.
-echo         (Descargando entorno base, por favor espera un momento...)
+echo         Descargando entorno base, por favor espera un momento...
 echo.
 
 :: Descargar Node ZIP portable usando powershell de forma silenciosa
@@ -54,7 +54,7 @@ set "PATH=%NODE_PATH%;%PATH%"
 
 :: 3. Instalar/verificar librerias (dependencias del proyecto)
 if not exist "node_modules\" (
-    echo [INFO] Descargando librerias del proyecto (esto solo ocurre una vez)...
+    echo [INFO] Descargando librerias del proyecto, esto solo ocurre una vez...
     call "%NPM_CMD%" install --silent
     if %errorlevel% neq 0 (
         color 0C
