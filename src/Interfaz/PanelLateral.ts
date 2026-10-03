@@ -188,6 +188,7 @@ export class PanelLateral {
 
   // -------- Modelo VRM (Etapa 1) --------
   private ConstruirSeccionModelo(): void {
+    this.ConstruirSeccionTransformacionGlobal();
     const Cuerpo = this.Seccion(this.RaizDer, 'Modelo VRM', true);
     const Ctx = this.Contexto;
 
@@ -316,6 +317,57 @@ export class PanelLateral {
     if (!Nombre) return;
     const [X, Y, Z] = this.DeslizadoresHueso.map((E) => ARadianes(parseFloat(E.value)));
     this.Contexto.Modelos.EstablecerRotacionHueso(Nombre, new THREE.Euler(X, Y, Z));
+  }
+
+  private ConstruirSeccionTransformacionGlobal(): void {
+    const Cuerpo = this.Seccion(this.RaizDer, 'Posición y Rotación Global', false);
+    const Ctx = this.Contexto;
+
+    this.Nota(Cuerpo, 'Mueve o rota al personaje completo en el escenario.');
+
+    const FilaX = document.createElement('div');
+    const FilaY = document.createElement('div');
+    const FilaZ = document.createElement('div');
+
+    const DeslizadoresPos: HTMLInputElement[] = [];
+
+    const SincronizarPosicion = () => {
+      if (!Ctx.Modelos.Vrm) return;
+      Ctx.Modelos.Vrm.scene.position.set(
+        parseFloat(DeslizadoresPos[0].value),
+        parseFloat(DeslizadoresPos[1].value),
+        parseFloat(DeslizadoresPos[2].value)
+      );
+    };
+
+    const Ejes = ['X (Izquierda/Derecha)', 'Y (Arriba/Abajo)', 'Z (Adelante/Atrás)'];
+    const Contenedores = [FilaX, FilaY, FilaZ];
+
+    for (let i = 0; i < 3; i++) {
+      const { Entrada } = this.Deslizador(
+        Contenedores[i], Ejes[i], -10, 10, 0.05, 0,
+        (V) => SincronizarPosicion(),
+        (V) => `${V.toFixed(2)}m`
+      );
+      DeslizadoresPos.push(Entrada);
+      Cuerpo.appendChild(Contenedores[i]);
+    }
+
+    const { Entrada: RotY } = this.Deslizador(
+        Cuerpo, 'Girar Personaje', -180, 180, 1, 0,
+        (V) => {
+          if (!Ctx.Modelos.Vrm) return;
+          Ctx.Modelos.Vrm.scene.rotation.y = V * Math.PI / 180;
+        },
+        (V) => `${V.toFixed(0)}°`
+    );
+
+    const BotonReset = this.Boton('Restablecer al centro', () => {
+      DeslizadoresPos.forEach(d => { d.value = '0'; d.dispatchEvent(new Event('input')); });
+      RotY.value = '0'; RotY.dispatchEvent(new Event('input'));
+    });
+    BotonReset.style.marginTop = '10px';
+    Cuerpo.appendChild(BotonReset);
   }
 
   // -------- Expresiones faciales (Etapa 2) --------

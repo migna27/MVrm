@@ -51,9 +51,6 @@ def calculate_full_body_angles(landmarks_dict):
     hips_mid = (lh + rh) / 2.0
     shoulders_mid = (ls + rs) / 2.0
     
-    # 1. Posición de cadera (Root) - Amplificamos un poco el movimiento
-    positions['hips'] = [float(hips_mid[0]*2.0), float(hips_mid[1]*2.0), float(hips_mid[2]*2.0)]
-    
     # 2. Vectores Observados (Dirección real en el video)
     spine_obs = shoulders_mid - hips_mid
     head_obs = nose - shoulders_mid
