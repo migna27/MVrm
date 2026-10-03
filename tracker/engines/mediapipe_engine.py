@@ -2,7 +2,7 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import time
-from utils.math_utils import calculate_euler_angles_from_landmarks, apply_anti_clipping
+from utils.math_utils import calculate_full_body_angles, apply_anti_clipping
 
 def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=None):
     mp_holistic = mp.solutions.holistic
