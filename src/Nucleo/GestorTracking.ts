@@ -124,10 +124,16 @@ export class GestorTracking {
       const MuestrasCuerpo: MuestraCuerpo[] = [];
       const MuestrasRostro: MuestraRostro[] = [];
 
-      for (let I = 0; I <= Total; I++) {
+      // Marca temporal estrictamente creciente para MediaPipe (ms)
+      let MarcaMsAnterior = 0;
+
+      for (let I = 0; I < Total; I++) {
         const T = Math.min(I / Fps, Duracion - 0.001);
         await this.IrATiempo(Video, T);
-        const MarcaMs = Math.max(1, T * 1000);
+
+        // MediaPipe requiere marcas estrictamente crecientes; garantizar ≥ 1 ms de avance
+        const MarcaMs = Math.max(MarcaMsAnterior + 1, Math.round(T * 1000));
+        MarcaMsAnterior = MarcaMs;
 
         if (Opciones.Cuerpo && this.DetectorPose) {
           const R = this.DetectorPose.detectForVideo(Video, MarcaMs);
@@ -147,7 +153,7 @@ export class GestorTracking {
             : null;
           MuestrasRostro.push({ Tiempo: I / Fps, Puntajes, Matriz });
         }
-        AlProgreso(I / Total, `Analizando cuadro ${I} de ${Total}…`);
+        AlProgreso(I / Total, `Analizando cuadro ${I + 1} de ${Total}…`);
       }
       URL.revokeObjectURL(Url);
 
@@ -161,10 +167,27 @@ export class GestorTracking {
     }
   }
 
-  /** Coloca el cabezal del video en un tiempo exacto y espera el cuadro. */
+  /**
+   * Coloca el cabezal del video en un tiempo exacto y espera el cuadro.
+   * Si el video ya está en el tiempo solicitado (±tolerancia), se resuelve
+   * inmediatamente para evitar que el evento 'seeked' nunca se dispare.
+   */
   private IrATiempo(Video: HTMLVideoElement, Tiempo: number): Promise<void> {
     return new Promise((Resolver) => {
-      const AlBuscar = () => { Video.removeEventListener('seeked', AlBuscar); Resolver(); };
+      // Si ya estamos suficientemente cerca del tiempo pedido, no buscar
+      if (Math.abs(Video.currentTime - Tiempo) < 0.01) {
+        Resolver();
+        return;
+      }
+      // Timeout de seguridad por si 'seeked' no se dispara
+      let Resuelto = false;
+      const Temporizador = setTimeout(() => {
+        if (!Resuelto) { Resuelto = true; Resolver(); }
+      }, 2000);
+      const AlBuscar = () => {
+        Video.removeEventListener('seeked', AlBuscar);
+        if (!Resuelto) { Resuelto = true; clearTimeout(Temporizador); Resolver(); }
+      };
       Video.addEventListener('seeked', AlBuscar);
       Video.currentTime = Tiempo;
     });
@@ -213,15 +236,12 @@ export class GestorTracking {
     const SeriePosicionCadera: { Tiempo: number; Posicion: THREE.Vector3 }[] = [];
     const CuaternionPrevio = new Map<string, THREE.Quaternion>();
     const PosicionPrevia = { Valor: PosicionReposoCadera.clone() };
-    const UltimaMuestraValida = new Map<number, THREE.Vector3>();
 
     const DirActual = new THREE.Vector3();
     const DirObjetivo = new THREE.Vector3();
     const Delta = new THREE.Quaternion();
-    const Mundial = new THREE.Quaternion();
-    const MundialPadre = new THREE.Quaternion();
+    const RotacionOriginal = new THREE.Quaternion();
     const NuevaLocal = new THREE.Quaternion();
-    const Identidad = new THREE.Quaternion();
 
     for (const Muestra of Muestras) {
       // Restablecer los huesos rastreados a su reposo antes de retear
@@ -247,9 +267,11 @@ export class GestorTracking {
           const Hijo = NombreHijo ? Modelos.ObtenerNodoHueso(NombreHijo) : null;
           if (!Hijo) continue;
 
-          // Dirección actual del hueso en el mundo (con los padres ya aplicados)
-          Nodo.updateWorldMatrix(true, false);
-          Hijo.updateWorldMatrix(true, false);
+          // Forzar propagación de matrices desde la raíz para tener datos frescos
+          // tras las modificaciones de cuaterniones de huesos anteriores en esta iteración
+          Modelos.Vrm!.scene.updateMatrixWorld(true);
+
+          // Dirección actual del hueso en el mundo
           DirActual.setFromMatrixPosition(Hijo.matrixWorld)
             .sub(new THREE.Vector3().setFromMatrixPosition(Nodo.matrixWorld));
           if (DirActual.lengthSq() < 1e-8) continue;
@@ -260,15 +282,23 @@ export class GestorTracking {
           if (DirObjetivo.lengthSq() < 1e-8) continue;
           DirObjetivo.normalize();
 
-          // Rotación mundial que alinea la dirección actual con la objetivo
+          // Rotación delta que alinea la dirección actual con la objetivo
           Delta.setFromUnitVectors(DirActual, DirObjetivo);
-          Nodo.getWorldQuaternion(Mundial);
-          Mundial.premultiply(Delta);
-          if (Entrada.Peso < 1) Mundial.slerpQuaternions(Identidad, Mundial, Entrada.Peso);
+
+          // Aplicar peso: interpolar el delta hacia identidad (sin corrección)
+          if (Entrada.Peso < 1) {
+            const Identidad = new THREE.Quaternion();
+            Delta.slerpQuaternions(Identidad, Delta, Entrada.Peso);
+          }
+
+          // Obtener la rotación mundial actual del nodo y aplicarle el delta
+          Nodo.getWorldQuaternion(RotacionOriginal);
+          const MundialObjetivo = Delta.clone().multiply(RotacionOriginal);
 
           // Convertir a espacio local del padre
+          const MundialPadre = new THREE.Quaternion();
           Nodo.parent!.getWorldQuaternion(MundialPadre).invert();
-          NuevaLocal.copy(MundialPadre).multiply(Mundial);
+          NuevaLocal.copy(MundialPadre).multiply(MundialObjetivo);
 
           // Suavizado exponencial entre muestras consecutivas
           const Previo = CuaternionPrevio.get(Entrada.Hueso);
@@ -335,11 +365,6 @@ export class GestorTracking {
       }
     }
     return Pistas;
-  }
-
-  /** Acceso seguro a un nodo de hueso (auxiliar de legibilidad). */
-  private ObtenerNodoNuloSeguro(Modelos: GestorModelos, Nombre: string): THREE.Object3D | null {
-    return Modelos.ObtenerNodoHueso(Nombre);
   }
 
   /** Reduce la cantidad de claves conservando solo cambios angulares notables. */
