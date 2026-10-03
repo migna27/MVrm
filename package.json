@@ -5,7 +5,7 @@
   "description": "Estudio de animación para modelos VRM: línea de tiempo, preajustes, seguimiento por video, efectos y exportación hasta 4K",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --open",
     "build": "vite build",
     "preview": "vite preview"
   },

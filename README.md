@@ -1,58 +1,52 @@
 # Animador VRM (Experimental v a-0.0.1)
 
-Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo DaVinci Resolve / CapCut para crear animaciones fluidas, posar personajes y exportar videos hasta 4K.
+Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (Experimental v a-0.0.1)
+## Características (v a-0.0.1)
 
-- **Layout Profesional de 3 Paneles:** Flujo de trabajo ordenado con biblioteca/assets a la izquierda, visor 3D central y panel de propiedades a la derecha.
-- **Posado 3D Directo:** Selecciona huesos directamente haciendo clic en el modelo 3D y utiliza el Gizmo visual (TransformControls) para rotarlos o moverlos.
+- **Layout Profesional de 3 Paneles:** Flujo de trabajo ordenado con biblioteca de assets a la izquierda, visor 3D central y panel de propiedades e inspector a la derecha.
+- **Posado 3D Directo en Visor:** Posibilidad de seleccionar huesos directamente haciendo clic sobre el modelo 3D y utilizar un Gizmo visual (TransformControls) para aplicar rotaciones y traslaciones.
   - `E` - Rotar hueso
-  - `W` - Trasladar (Ideal para cadera/hips)
-  - `R` - Alternar entre espacio local/mundo
-  - `Q` - Deseleccionar
-- **Línea de Tiempo Multiestado:** Sistema de _keyframes_ por interpolación para cada hueso, expresión facial, traslaciones y animaciones importadas.
-- **Biblioteca de Animaciones y Poses:** Preajustes corregidos y listos para ser aplicados en la línea de tiempo. Soporte para importación de animaciones `.vrma` o `.json`.
-- **Escena y Efectos:** Personaliza el fondo (Color, imagen o un modelo 3D estático), iluminación (fuerza de luz, bloom) y sistemas de partículas (nieve, lluvia, chispas).
-- **Audio Integrado:** Añade pistas de sonido con control de desplazamiento temporal y visualización en tiempo real.
-- **Exportación 4K:** Renderización a MP4 o WebM a frame constante para asegurar la máxima calidad (hasta 60fps) independientemente del rendimiento del navegador.
-- *(En pausa)* **Seguimiento por video (Video Tracking):** Extracción de poses a partir de video mediante MediaPipe (Temporalmente oculto en esta versión experimental para priorizar la estabilidad de la UI).
+  - `W` - Trasladar (Ideal para posicionar la cadera en el escenario)
+  - `R` - Alternar entre espacio local y mundo
+  - `Q` - Deseleccionar hueso activo
+- **Biblioteca Local Integrada:** Reconocimiento de archivos guardados en las carpetas `user/` (las cuales se autogeneran al soltar archivos) o en `public/assets/`. Modelos, poses y animaciones pueden seleccionarse con un clic.
+- **Línea de Tiempo Multiestado:** Sistema de *keyframes* mediante interpolación matemática para cada hueso, expresión facial, posición en escena y animaciones importadas.
+- **Catálogo de Poses Base:** Preajustes corregidos matemáticamente (T-Pose a rotaciones seguras) e integrados para animaciones básicas (Sentado, Combate, Victoria, Caminar, Respiración, etc). Soporta importación y mezcla de datos en formatos `.vrma` o `.json`.
+- **Motor de Escena y Efectos:** Personalización completa del fondo (color sólido, imagen estática o modelos 3D en formato GLB/GLTF/VRM), sistema de iluminación principal con "Bloom" y sistemas de partículas persistentes optimizados (Nieve, Lluvia, Burbujas, Magia, Chispas, Pétalos).
+- **Exportación 4K:** Sistema de renderizado secuencial a formato MP4 (H.264+AAC) o WebM que asegura tasa de fotogramas constante sin importar el rendimiento del hardware.
+- *(Nota de versión)* **Seguimiento por video (Video Tracking):** Extracción de poses a partir de video mediante MediaPipe (temporalmente oculto en esta versión experimental).
 
-## Requerimientos del Sistema
+## Requisitos de Entorno
 
-Al ser un proyecto basado en **Node.js** y **Vite**, las dependencias y requerimientos técnicos se gestionan automáticamente a través del archivo `package.json`.
+El proyecto corre de forma local a través de Vite (servidor web) y requiere Node.js para resoluciones de API y hospedaje de archivos temporales.
 
-Para ejecutar este proyecto necesitas:
+## Instalación Fácil (Windows)
 
-- **Node.js**: Versión 18.0 o superior recomendada.
-- **NPM**: Gestor de paquetes (incluido con Node.js).
+Para los usuarios finales en Windows que no cuenten con experiencia técnica ni instaladores en su equipo, el repositorio incluye un iniciador automático de "Cero Instalación":
 
-## Dependencias Principales
+1. Da doble clic en el archivo `iniciar.bat`.
+2. El script detectará si hace falta Node.js y las librerías. De ser así, descargará e instalará automáticamente una versión portable y privada del entorno en la propia carpeta del proyecto.
+3. El navegador predeterminado se abrirá por su cuenta (usualmente en la dirección `http://localhost:5173`).
 
-- `three`: ^0.169.0 (Motor 3D)
-- `@pixiv/three-vrm`: ^3.1.5 (Soporte para modelos VRM)
-- `@pixiv/three-vrm-animation`: ^3.1.0 (Animaciones de formato VRMA)
-- `@mediapipe/tasks-vision`: 0.10.14 (Seguimiento corporal y facial)
-- `mp4-muxer`: ^5.1.2 (Exportación de video nativo MP4)
+*Para cerrar el entorno, simplemente cierra la ventana de la consola (símbolo del sistema).*
 
-## Instalación y Ejecución
+## Ejecución Manual (Desarrolladores)
 
-La forma más rápida de instalar todo en Windows es dar doble clic al archivo `iniciar.bat`, el cual descargará las dependencias y ejecutará el servidor automáticamente.
+Si ya cuentas con un entorno Node.js y prefieres gestionar la consola manualmente:
 
-De forma manual por consola:
-
-1. **Instalar dependencias:**
+1. Clona el repositorio e instala las dependencias:
    ```bash
    npm install
    ```
 
-2. **Iniciar servidor de desarrollo:**
+2. Arranca el servidor de desarrollo en caliente:
    ```bash
    npm run dev
    ```
-   *Esto abrirá la aplicación en tu navegador local (usualmente en `http://localhost:5173`).*
 
-3. **Compilar para producción:**
+3. Para preparar los archivos optimizados y estáticos en producción (si se va a subir a un servidor público):
    ```bash
    npm run build
    ```
-   *Los archivos compilados y listos para subir a un servidor web se generarán en la carpeta `dist/`.*
+   *Los archivos compilados listos para despliegue se generarán en el directorio `dist/`.*

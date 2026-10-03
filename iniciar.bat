@@ -1,59 +1,81 @@
 @echo off
-title Preparando Entorno - Animador VRM
-color 0A
+setlocal
+title Animador VRM - Cero Instalacion
+color 0B
 
 echo ===================================================
-echo       Asistente de Inicio - Animador VRM
+echo       Animador VRM - Asistente de Inicio
 echo ===================================================
 echo.
 
-:: 1. Comprobar si Node.js esta instalado
-where node >nul 2>nul
-if %errorlevel% neq 0 (
+:: Definir rutas locales portables
+set "NODE_DIR=%~dp0.node"
+set "NODE_VERSION=v20.11.1"
+set "NODE_ZIP=node-%NODE_VERSION%-win-x64.zip"
+set "NODE_URL=https://nodejs.org/dist/%NODE_VERSION%/%NODE_ZIP%"
+set "NODE_PATH=%NODE_DIR%\node-%NODE_VERSION%-win-x64"
+set "NODE_EXE=%NODE_PATH%\node.exe"
+set "NPM_CMD=%NODE_PATH%\npm.cmd"
+
+:: 1. Comprobar Node.js (Portable)
+if exist "%NODE_EXE%" (
+    echo [OK] Motor interno detectado.
+    goto :entorno_preparado
+)
+
+echo [AVISO] Preparando motor interno por primera vez...
+echo         Esto no instalara nada en tu computadora ni requiere permisos de administrador.
+echo         (Descargando entorno base, por favor espera un momento...)
+echo.
+
+:: Descargar Node ZIP portable usando powershell de forma silenciosa
+powershell -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%NODE_URL%' -OutFile '%NODE_ZIP%'"
+
+if not exist "%NODE_ZIP%" (
     color 0C
-    echo [ERROR] Node.js no esta instalado en este equipo.
-    echo.
-    echo Para que este proyecto funcione, necesitas instalar Node.js.
-    echo Descargalo gratuitamente desde: https://nodejs.org/
-    echo.
-    echo Una vez instalado, vuelve a ejecutar este archivo.
+    echo [ERROR] No se pudo descargar el motor base. Revisa tu conexion a internet.
     pause
     exit /b
 )
 
-echo [OK] Node.js detectado correctamente.
+echo.
+echo [INFO] Extrayendo archivos necesarios...
+powershell -Command "Expand-Archive -Path '%NODE_ZIP%' -DestinationPath '%NODE_DIR%' -Force"
 
-:: 2. Instalar dependencias si no existen
+:: Limpiar el archivo ZIP
+del "%NODE_ZIP%"
+
+echo [OK] Motor interno configurado exitosamente.
+echo.
+
+:entorno_preparado
+:: 2. Actualizar el PATH temporalmente para la sesion de esta consola
+set "PATH=%NODE_PATH%;%PATH%"
+
+:: 3. Instalar/verificar librerias (dependencias del proyecto)
 if not exist "node_modules\" (
-    echo.
-    echo [INFO] Configurando el entorno por primera vez...
-    echo Descargando e instalando dependencias (esto puede tardar unos minutos)...
-    call npm install
-    
+    echo [INFO] Descargando librerias del proyecto (esto solo ocurre una vez)...
+    call "%NPM_CMD%" install --silent
     if %errorlevel% neq 0 (
         color 0C
-        echo.
-        echo [ERROR] Hubo un problema al intentar instalar las dependencias.
-        echo Revisa tu conexion a internet o los permisos de la carpeta.
+        echo [ERROR] Hubo un problema al descargar las librerias.
         pause
         exit /b
     )
+    echo [OK] Librerias instaladas.
     echo.
-    echo [OK] Entorno configurado con exito.
-) else (
-    echo [OK] El entorno ya esta configurado (node_modules existe).
 )
 
-:: 3. Iniciar el servidor local
-echo.
+:: 4. Arrancar aplicacion
+color 0A
 echo ===================================================
-echo    Iniciando el Servidor de Desarrollo...
+echo       Iniciando aplicacion en el navegador...
 echo ===================================================
 echo.
-echo Se abrira una direccion local (ej: http://localhost:5173) 
-echo Puedes presionar Ctrl+C en esta ventana para detener el servidor.
+echo No cierres esta ventana negra mientras estes usando el animador.
+echo Para salir, simplemente cierra esta consola.
 echo.
 
-call npm run dev
+call "%NPM_CMD%" run dev
 
 pause
