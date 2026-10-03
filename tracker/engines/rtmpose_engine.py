@@ -167,6 +167,9 @@ def run_rtmpose_tracking(source, live=False, osc_client=None, fps_target=24):
         if live:
             cv2.imshow("Animador VRM - RTMPose", crop)
             if cv2.waitKey(1) & 0xFF == 27: break
+        else:
+            if frame_idx % 10 == 0 and total_frames > 0:
+                print(f"[PROGRESS] {int((frame_idx / total_frames) * 100)}")
             
         frame_idx += 1
         

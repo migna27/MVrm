@@ -692,7 +692,7 @@ export class PanelLateral {
     const BotonProcesar = this.Boton('▶ Procesar Video', async () => {
       if (!ArchivoVideoTemp) { Ctx.NotificarEstado('Carga primero un video.'); return; }
       if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo VRM.'); return; }
-      if (SelectorMotor.value !== 'mediapipe') {
+      if (SelectorMotor.value !== 'mediapipe' && SelectorMotor.value !== 'rtmpose') {
         Ctx.NotificarEstado('Este motor de IA estará disponible próximamente.'); return;
       }
       
