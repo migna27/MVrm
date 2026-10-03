@@ -892,13 +892,27 @@ export class PanelLateral {
     this.Casilla(Cuerpo, 'Mostrar rejilla de piso', true, (V) => Ctx.Escena.AlternarRejilla(V));
   }
 
-  // -------- Efectos (Etapa 4) --------
+  // -------- Efectos y Luces (Etapa 4) --------
   private ConstruirSeccionEfectos(): void {
-    const Cuerpo = this.Seccion(this.RaizIzq, 'Efectos');
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Iluminación y Efectos');
     const Ctx = this.Contexto;
 
-    const CasillaBloom = this.Casilla(Cuerpo, 'Brillo (bloom)', false, (V) => Ctx.Escena.EstablecerBloom(V));
-    this.Deslizador(Cuerpo, 'Intensidad brillo', 0, 2, 0.05, 0.55, (V) => Ctx.Escena.EstablecerBloom(CasillaBloom.checked, V));
+    this.Nota(Cuerpo, 'Ajusta la exposición y las luces de la escena.');
+    this.Deslizador(Cuerpo, 'Exposición (Tonemapping)', 0.1, 3.0, 0.1, 1.0, (V) => Ctx.Escena.EstablecerExposicion(V));
+    this.Deslizador(Cuerpo, 'Intensidad Luz Direccional', 0, 5, 0.1, 2.2, (V) => Ctx.Escena.EstablecerLuzDireccional(V));
+    this.Deslizador(Cuerpo, 'Intensidad Luz Ambiental', 0, 3, 0.1, 0.85, (V) => Ctx.Escena.EstablecerLuzAmbiental(V));
+
+    this.Nota(Cuerpo, 'Post-procesamiento y partículas.');
+    
+    // Variables para retener el estado de Bloom
+    let FuerzaB = 0.55;
+    let RadioB = 0.6;
+    let UmbralB = 0.85;
+
+    const CasillaBloom = this.Casilla(Cuerpo, 'Brillo (Bloom)', false, (V) => Ctx.Escena.EstablecerBloom(V, FuerzaB, RadioB, UmbralB));
+    this.Deslizador(Cuerpo, 'Fuerza Bloom', 0, 3, 0.1, FuerzaB, (V) => { FuerzaB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
+    this.Deslizador(Cuerpo, 'Radio Bloom', 0, 1, 0.05, RadioB, (V) => { RadioB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
+    this.Deslizador(Cuerpo, 'Umbral Bloom', 0, 1, 0.05, UmbralB, (V) => { UmbralB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
 
     const Fila = document.createElement('div');
     Fila.className = 'FilaControles';

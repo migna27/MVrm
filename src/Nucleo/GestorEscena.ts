@@ -188,14 +188,30 @@ export class GestorEscena {
   }
 
   /** Activa o desactiva el efecto de brillo (bloom). */
-  public EstablecerBloom(Activo: boolean, Fuerza?: number): void {
+  public EstablecerBloom(Activo: boolean, Fuerza?: number, Radio?: number, Umbral?: number): void {
     this.BloomActivo = Activo;
     if (Fuerza !== undefined) this.BloomFuerza = Fuerza;
+    if (this.PaseBloom) {
+      if (Radio !== undefined) this.PaseBloom.radius = Radio;
+      if (Umbral !== undefined) this.PaseBloom.threshold = Umbral;
+    }
   }
 
-  /** Intensidad de la luz principal. */
-  public EstablecerIntensidadLuz(Valor: number): void {
-    this.LuzDireccional.intensity = Valor;
+  /** Exposición general (Tonemapping) */
+  public EstablecerExposicion(Valor: number): void {
+    this.Renderer.toneMappingExposure = Valor;
+  }
+
+  /** Intensidad y color de la luz direccional principal. */
+  public EstablecerLuzDireccional(Intensidad: number, ColorHex?: string): void {
+    this.LuzDireccional.intensity = Intensidad;
+    if (ColorHex) this.LuzDireccional.color.set(ColorHex);
+  }
+
+  /** Intensidad y color de la luz ambiental. */
+  public EstablecerLuzAmbiental(Intensidad: number, ColorHex?: string): void {
+    this.LuzAmbiental.intensity = Intensidad;
+    if (ColorHex) this.LuzAmbiental.color.set(ColorHex);
   }
 
   /** Muestra u oculta la rejilla de referencia. */
