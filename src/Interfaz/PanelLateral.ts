@@ -359,7 +359,110 @@ export class PanelLateral {
       })
     );
     Cuerpo.appendChild(Fila);
-    this.Nota(Cuerpo, 'Los preajustes y las animaciones importadas (.vrma / .json) se insertan desde la posición del cabezal y quedan como claves editables.');
+    this.Nota(Cuerpo, 'Soporta archivos .vrma (animaciones) y .json (poses/keyframes).');
+
+    // Navegador de la biblioteca local
+    const ContenedorNavegador = document.createElement('div');
+    ContenedorNavegador.style.marginTop = '16px';
+    ContenedorNavegador.style.borderTop = '1px solid var(--ColorBorde)';
+    ContenedorNavegador.style.paddingTop = '12px';
+    Cuerpo.appendChild(ContenedorNavegador);
+
+    this.ConstruirNavegadorArchivos(ContenedorNavegador);
+  }
+
+  private async ConstruirNavegadorArchivos(Contenedor: HTMLElement): Promise<void> {
+    const Ctx = this.Contexto;
+    try {
+      const Res = await fetch('/api/library');
+      if (!Res.ok) return; // Si no hay servidor local con API (p.ej. compilación estática), ignorar
+      const Libreria = await Res.json();
+
+      const CrearLista = (Titulo: string, Archivos: any[], AlHacerClic: (Ruta: string, Nombre: string) => void, CategoriaId: string) => {
+        if (Archivos.length === 0) return;
+        const TituloElem = document.createElement('h3');
+        TituloElem.textContent = Titulo;
+        TituloElem.style.fontSize = '12px';
+        TituloElem.style.color = 'var(--ColorTextoTenue)';
+        TituloElem.style.marginBottom = '8px';
+        Contenedor.appendChild(TituloElem);
+
+        const Lista = document.createElement('div');
+        Lista.style.display = 'flex';
+        Lista.style.flexDirection = 'column';
+        Lista.style.gap = '4px';
+        Lista.style.marginBottom = '12px';
+
+        Archivos.forEach(Arch => {
+          const Item = document.createElement('div');
+          Item.className = 'ItemBiblioteca';
+          Item.style.display = 'flex';
+          Item.style.justifyContent = 'space-between';
+          Item.style.background = 'var(--ColorBorde)';
+          Item.style.padding = '6px 10px';
+          Item.style.borderRadius = '4px';
+          Item.style.cursor = 'pointer';
+          Item.style.fontSize = '12px';
+
+          const Etiqueta = document.createElement('span');
+          Etiqueta.textContent = (Arch.isUser ? '👤 ' : '📦 ') + Arch.name;
+          Item.appendChild(Etiqueta);
+
+          Item.onclick = () => AlHacerClic(Arch.path, Arch.name);
+          Item.onmouseover = () => Item.style.background = 'var(--ColorAcentoHover)';
+          Item.onmouseout = () => Item.style.background = 'var(--ColorBorde)';
+          Lista.appendChild(Item);
+        });
+        Contenedor.appendChild(Lista);
+      };
+
+      Contenedor.innerHTML = '<h3 style="margin: 0 0 10px 0; font-size: 13px;">Archivos Locales</h3>';
+
+      CrearLista('Modelos (.vrm)', Libreria.models, async (Ruta, Nombre) => {
+        Ctx.NotificarEstado(`Cargando modelo ${Nombre}...`);
+        try {
+          const ResUrl = await fetch(Ruta);
+          const Archivo = new File([await ResUrl.blob()], Nombre);
+          await Ctx.Modelos.CargarVrm(Archivo);
+          this.RefrescarDinamico();
+          Ctx.Escena.ControlTransformacion.detach();
+          Ctx.NotificarEstado(`Modelo ${Nombre} cargado.`);
+        } catch(E) { Ctx.NotificarEstado(`Error: ${(E as Error).message}`); }
+      }, 'models');
+
+      CrearLista('Animaciones (.vrma)', Libreria.animations, async (Ruta, Nombre) => {
+        if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo.'); return; }
+        Ctx.NotificarEstado(`Importando animación ${Nombre}...`);
+        try {
+          const ResUrl = await fetch(Ruta);
+          const Archivo = new File([await ResUrl.blob()], Nombre);
+          const Clip = await Ctx.Modelos.CargarAnimacionVrma(Archivo);
+          Ctx.Animacion.AgregarPistas(Ctx.Animacion.HornearClip(Clip, 24, Nombre));
+          Ctx.NotificarEstado(`Animación ${Nombre} insertada.`);
+        } catch(E) { Ctx.NotificarEstado(`Error: ${(E as Error).message}`); }
+      }, 'animations');
+
+      CrearLista('Poses (.json)', Libreria.poses, async (Ruta, Nombre) => {
+        if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo.'); return; }
+        Ctx.NotificarEstado(`Importando pose ${Nombre}...`);
+        try {
+          const ResUrl = await fetch(Ruta);
+          const Datos = await ResUrl.json();
+          if (Array.isArray(Datos.Pistas)) {
+            // Reajustar tiempos para que se inserten en el tiempo actual
+            const InicioBase = Datos.Pistas.length > 0 && Datos.Pistas[0].Claves.length > 0 ? Datos.Pistas[0].Claves[0].Tiempo : 0;
+            const Offset = Ctx.Animacion.TiempoActual - InicioBase;
+            Datos.Pistas.forEach((P: any) => P.Claves.forEach((C: any) => C.Tiempo += Offset));
+            
+            Ctx.Animacion.AgregarPistas(Datos.Pistas);
+            Ctx.NotificarEstado(`Pose ${Nombre} aplicada.`);
+          }
+        } catch(E) { Ctx.NotificarEstado(`Error: ${(E as Error).message}`); }
+      }, 'poses');
+
+    } catch (E) {
+      // Ignorar fallo de fetch si el servidor Vite no tiene el plugin (producción)
+    }
   }
 
   // -------- Seguimiento por video (Etapa 3) --------

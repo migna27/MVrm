@@ -232,6 +232,13 @@ ContenedorVisor.addEventListener('dragover', (E) => {
   ZonaSoltar.classList.remove('Oculto');
 });
 ContenedorVisor.addEventListener('dragleave', () => ZonaSoltar.classList.add('Oculto'));
+async function SubirArchivoLocal(Archivo: File, Categoria: string): Promise<void> {
+  const formData = new FormData();
+  formData.append('file', Archivo);
+  formData.append('category', Categoria);
+  try { await fetch('/api/upload', { method: 'POST', body: formData }); } catch(e) {}
+}
+
 ContenedorVisor.addEventListener('drop', async (E) => {
   E.preventDefault();
   ZonaSoltar.classList.add('Oculto');
@@ -243,15 +250,20 @@ ContenedorVisor.addEventListener('drop', async (E) => {
       Escena.ControlTransformacion.detach();
       await Modelos.CargarVrm(Archivo);
       Panel.RefrescarDinamico();
-      Contexto.NotificarEstado(`Modelo cargado: ${Archivo.name}`);
+      SubirArchivoLocal(Archivo, 'models');
+      Contexto.NotificarEstado(`Modelo cargado y guardado en biblioteca local: ${Archivo.name}`);
     } else if (Nombre.endsWith('.vrma')) {
       const Clip = await Modelos.CargarAnimacionVrma(Archivo);
       Animacion.AgregarPistas(Animacion.HornearClip(Clip, 24, 'Importado'));
-      Contexto.NotificarEstado('Animación VRMA importada como claves editables.');
+      SubirArchivoLocal(Archivo, 'animations');
+      Contexto.NotificarEstado('Animación importada y guardada en biblioteca.');
     } else if (Nombre.endsWith('.glb') || Nombre.endsWith('.gltf')) {
       Escena.EstablecerModeloFondo(await Modelos.CargarModeloFondo(Archivo));
       Contexto.NotificarEstado(`Modelo de fondo cargado: ${Archivo.name}`);
     } else if (Nombre.endsWith('.json')) {
+      if (Nombre.includes('pose') || Nombre.includes('anim')) {
+        SubirArchivoLocal(Archivo, 'poses'); // Asumimos que si es soltado, se guarda como pose
+      }
       await AbrirProyecto(Archivo);
     } else if (/\.(mp3|wav|ogg|m4a|flac)$/.test(Nombre)) {
       await Audio.Cargar(Archivo);
