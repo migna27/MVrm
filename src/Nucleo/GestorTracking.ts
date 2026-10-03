@@ -119,6 +119,12 @@ export class GestorTracking {
         Video.onerror = () => Rechazar(new Error('No se pudo leer el video.'));
       });
 
+      // Usar un Canvas asegura que el navegador rasterice los píxeles frescos del video
+      const Canvas = document.createElement('canvas');
+      Canvas.width = Video.videoWidth || 640;
+      Canvas.height = Video.videoHeight || 480;
+      const CtxCanvas = Canvas.getContext('2d', { willReadFrequently: true })!;
+
       const Duracion = Video.duration;
       const Fps = Opciones.FpsMuestreo;
       const Total = Math.max(1, Math.floor(Duracion * Fps));
@@ -132,17 +138,20 @@ export class GestorTracking {
         const T = Math.min(I / Fps, Duracion - 0.001);
         await this.IrATiempo(Video, T);
 
+        // Forzar dibujo en canvas para obtener el frame visual actual
+        CtxCanvas.drawImage(Video, 0, 0, Canvas.width, Canvas.height);
+
         // MediaPipe requiere marcas estrictamente crecientes; garantizar ≥ 1 ms de avance
         const MarcaMs = Math.max(MarcaMsAnterior + 1, this.BaseTimestampMs + Math.round(T * 1000));
         MarcaMsAnterior = MarcaMs;
 
         if (Opciones.Cuerpo && this.DetectorPose) {
-          const R = this.DetectorPose.detectForVideo(Video, MarcaMs);
+          const R = this.DetectorPose.detectForVideo(Canvas, MarcaMs);
           const Puntos = (R.worldLandmarks && R.worldLandmarks[0]) || (R.landmarks && R.landmarks[0]) || null;
           MuestrasCuerpo.push({ Tiempo: I / Fps, Puntos: Puntos as any });
         }
         if (Opciones.Rostro && this.DetectorRostro) {
-          const R = this.DetectorRostro.detectForVideo(Video, MarcaMs);
+          const R = this.DetectorRostro.detectForVideo(Canvas, MarcaMs);
           const Puntajes = new Map<string, number>();
           if (R.faceBlendshapes && R.faceBlendshapes[0]) {
             for (const Categoria of R.faceBlendshapes[0].categories) {
@@ -188,10 +197,24 @@ export class GestorTracking {
       const Temporizador = setTimeout(() => {
         if (!Resuelto) { Resuelto = true; Resolver(); }
       }, 2000);
+      
       const AlBuscar = () => {
         Video.removeEventListener('seeked', AlBuscar);
-        if (!Resuelto) { Resuelto = true; clearTimeout(Temporizador); Resolver(); }
+        if (Resuelto) return;
+        
+        // Esperar a que el motor de video realmente decodifique el frame visual
+        if ('requestVideoFrameCallback' in Video) {
+          (Video as any).requestVideoFrameCallback(() => {
+            if (!Resuelto) { Resuelto = true; clearTimeout(Temporizador); Resolver(); }
+          });
+        } else {
+          // Fallback para navegadores antiguos
+          setTimeout(() => {
+            if (!Resuelto) { Resuelto = true; clearTimeout(Temporizador); Resolver(); }
+          }, 20);
+        }
       };
+      
       Video.addEventListener('seeked', AlBuscar);
       Video.currentTime = Tiempo;
     });
