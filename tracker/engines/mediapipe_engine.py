@@ -43,6 +43,10 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
         if not live:
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             print(f"[STATE] Analizando video ({total_frames} frames)...")
+        else:
+            # Hacer que la ventana de la cámara sea redimensionable y empiece pequeña
+            cv2.namedWindow("Animador VRM - Preview Tracking", cv2.WINDOW_NORMAL)
+            cv2.resizeWindow("Animador VRM - Preview Tracking", 640, 360)
 
         while cap.isOpened():
             ret, frame = cap.read()
