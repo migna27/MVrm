@@ -66,6 +66,7 @@ export class GestorTracking {
   private DetectorPose: PoseLandmarker | null = null;
   private DetectorRostro: FaceLandmarker | null = null;
   public Procesando = false;
+  private BaseTimestampMs = 0;
 
   /** Descarga e inicializa los modelos de MediaPipe (solo la primera vez). */
   public async Inicializar(Opciones: OpcionesSeguimiento, AlEstado: (M: string) => void): Promise<void> {
@@ -124,15 +125,15 @@ export class GestorTracking {
       const MuestrasCuerpo: MuestraCuerpo[] = [];
       const MuestrasRostro: MuestraRostro[] = [];
 
-      // Marca temporal estrictamente creciente para MediaPipe (ms)
-      let MarcaMsAnterior = 0;
+      // Marca temporal estrictamente creciente para MediaPipe (ms) a través de varios videos
+      let MarcaMsAnterior = this.BaseTimestampMs;
 
       for (let I = 0; I < Total; I++) {
         const T = Math.min(I / Fps, Duracion - 0.001);
         await this.IrATiempo(Video, T);
 
         // MediaPipe requiere marcas estrictamente crecientes; garantizar ≥ 1 ms de avance
-        const MarcaMs = Math.max(MarcaMsAnterior + 1, Math.round(T * 1000));
+        const MarcaMs = Math.max(MarcaMsAnterior + 1, this.BaseTimestampMs + Math.round(T * 1000));
         MarcaMsAnterior = MarcaMs;
 
         if (Opciones.Cuerpo && this.DetectorPose) {
@@ -156,6 +157,9 @@ export class GestorTracking {
         AlProgreso(I / Total, `Analizando cuadro ${I + 1} de ${Total}…`);
       }
       URL.revokeObjectURL(Url);
+
+      // Avanzar el contador base de tiempo para el próximo video (con un margen extra de 1s)
+      this.BaseTimestampMs = MarcaMsAnterior + 1000;
 
       // Construir las pistas editables a partir de las muestras
       const Pistas: PistaAnimacion[] = [];
