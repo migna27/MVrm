@@ -6,12 +6,16 @@ from utils.math_utils import calculate_euler_angles_from_landmarks, apply_anti_c
 
 def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=None):
     mp_pose = mp.solutions.pose
+    mp_drawing = mp.solutions.drawing_utils
     
-    # Si es live, intentamos abrir la camara (0)
     source = int(video_path) if live and video_path.isdigit() else video_path
     if live and not video_path: source = 0
     
     cap = cv2.VideoCapture(source)
+    if not cap.isOpened():
+        print(f"[ERROR] No se pudo abrir la cámara o video: {source}")
+        return {}, 0
+
     video_fps = cap.get(cv2.CAP_PROP_FPS)
     if video_fps <= 0: video_fps = 30
     frame_interval = max(1, int(video_fps / fps_target))
@@ -19,6 +23,8 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
     tracks_raw = {}
     frame_idx = 0
     
+    print("[INFO] Iniciando captura. Presiona ESC en la ventana de preview para salir.")
+
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5, model_complexity=1 if live else 2) as pose:
         while cap.isOpened():
             ret, frame = cap.read()
@@ -27,7 +33,6 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
             if live or (frame_idx % frame_interval == 0):
                 time_sec = frame_idx / video_fps
                 
-                # Para la camara, hacer efecto espejo
                 if live:
                     frame = cv2.flip(frame, 1)
                     
@@ -35,6 +40,14 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                 image.flags.writeable = False
                 results = pose.process(image)
                 
+                # Para el preview
+                image.flags.writeable = True
+                image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                
+                if results.pose_landmarks:
+                    # Dibujar landmarks 2D en el preview
+                    mp_drawing.draw_landmarks(image_bgr, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
                 if results.pose_world_landmarks:
                     lms = results.pose_world_landmarks.landmark
                     ls = np.array([lms[11].x, lms[11].y, lms[11].z])
@@ -49,25 +62,29 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                     
                     if live and osc_client:
                         from scipy.spatial.transform import Rotation
-                        # Enviar por OSC instantaneamente
                         for bone, rot in angles.items():
-                            # Rotación a quaternion
-                            r = Rotation.from_euler('xyz', rot)
-                            qx, qy, qz, qw = r.as_quat()
-                            # Enviar: VMC/Ext/Bone/Pos -> nombre, px, py, pz, qx, qy, qz, qw
-                            osc_client.send_message("/VMC/Ext/Bone/Pos", [bone, 0.0, 0.0, 0.0, float(qx), float(qy), float(qz), float(qw)])
-                        # Aplicar (Apply)
+                            try:
+                                r = Rotation.from_euler('xyz', rot)
+                                qx, qy, qz, qw = r.as_quat()
+                                osc_client.send_message("/VMC/Ext/Bone/Pos", [bone, 0.0, 0.0, 0.0, float(qx), float(qy), float(qz), float(qw)])
+                            except Exception as e:
+                                pass
                         osc_client.send_message("/VMC/Ext/Blend/Apply", [])
                         
                     else:
                         for bone, rot in angles.items():
                             if bone not in tracks_raw: tracks_raw[bone] = []
                             tracks_raw[bone].append({"Id": f"tr_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": rot})
+                
+                if live:
+                    cv2.imshow("Animador VRM - Preview Tracking", image_bgr)
+                    if cv2.waitKey(1) & 0xFF == 27: # ESC
+                        break
                             
             frame_idx += 1
             if live:
-                # Mantener un ritmo moderado en live si la camara va muy rapido
-                time.sleep(0.01)
+                time.sleep(0.005)
                 
     cap.release()
+    cv2.destroyAllWindows()
     return tracks_raw, (frame_idx / video_fps)
