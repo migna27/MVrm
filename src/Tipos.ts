@@ -4,7 +4,7 @@
 // ============================================================================
 
 /** Objetivo que puede animar una pista de la línea de tiempo. */
-export type TipoObjetivoPista = 'HuesoRotacion' | 'HuesoPosicion' | 'Expresion' | 'Efecto' | 'Luz';
+export type TipoObjetivoPista = 'HuesoRotacion' | 'HuesoPosicion' | 'Expresion' | 'Efecto' | 'Luz' | 'CamaraPosicion' | 'CamaraObjetivo' | 'CamaraFOV';
 
 /** Origen de una pista; define el color y la prioridad de aplicación. */
 export type GrupoPista = 'Manual' | 'Preajuste' | 'Importado' | 'SeguimientoCuerpo' | 'SeguimientoRostro' | 'GrabacionVMC';

@@ -173,6 +173,7 @@ export class PanelLateral {
     this.ConstruirSeccionBiblioteca();
     this.ConstruirSeccionEscena();
     this.ConstruirSeccionEfectos();
+    this.ConstruirSeccionCamara();
     this.ConstruirSeccionAudio();
     this.ConstruirSeccionVMC();
     this.ConstruirSeccionSeguimiento();
@@ -1023,6 +1024,45 @@ export class PanelLateral {
     this.Deslizador(Cuerpo, 'Cantidad partículas', 50, 1000, 10, 300, (V) => {
       if (Ctx.Efectos.Tipo !== 'Ninguno') Ctx.Efectos.EstablecerParticulas(Ctx.Efectos.Tipo, V);
     }, (V) => String(Math.round(V)));
+  }
+
+  // -------- Cámara --------
+  private ConstruirSeccionCamara(): void {
+    const Cuerpo = this.Seccion(this.RaizIzq, 'Cámara', false);
+    const Ctx = this.Contexto;
+
+    this.Nota(Cuerpo, 'Mueve la cámara con el ratón en la vista 3D y usa este botón para grabar su posición actual en la línea de tiempo.');
+
+    const BotonGrabar = this.Boton('🎥 Grabar Cámara Actual', () => {
+      const Pos = Ctx.Escena.Camara.position;
+      const Obj = Ctx.Escena.Controles.target;
+      const FOV = Ctx.Escena.Camara.fov;
+      const T = Ctx.Animacion.TiempoActual;
+      
+      const PistaPos = Ctx.Animacion.ObtenerOCrearPista('CamaraPosicion', 'Posición', 'Manual');
+      Ctx.Animacion.AgregarClave(PistaPos, T, [Pos.x, Pos.y, Pos.z]);
+      
+      const PistaObj = Ctx.Animacion.ObtenerOCrearPista('CamaraObjetivo', 'Objetivo', 'Manual');
+      Ctx.Animacion.AgregarClave(PistaObj, T, [Obj.x, Obj.y, Obj.z]);
+      
+      const PistaFov = Ctx.Animacion.ObtenerOCrearPista('CamaraFOV', 'Campo de Visión', 'Manual');
+      Ctx.Animacion.AgregarClave(PistaFov, T, [FOV]);
+      
+      Ctx.NotificarEstado('Posición de cámara guardada en el fotograma actual.');
+    });
+    BotonGrabar.style.marginBottom = '10px';
+    Cuerpo.appendChild(BotonGrabar);
+    
+    // Sliders for manual FOV / fine-tuning? The user can just drag the 3D viewport mostly.
+    // Let's just add FOV slider
+    this.Deslizador(Cuerpo, 'Campo de Visión (FOV)', 10, 120, 1, Ctx.Escena.Camara.fov, 
+      (V) => { Ctx.Escena.Camara.fov = V; Ctx.Escena.Camara.updateProjectionMatrix(); }, 
+      (V) => `${V.toFixed(0)}°`,
+      () => {
+        const PistaFov = Ctx.Animacion.ObtenerOCrearPista('CamaraFOV', 'Campo de Visión', 'Manual');
+        Ctx.Animacion.AgregarClave(PistaFov, Ctx.Animacion.TiempoActual, [Ctx.Escena.Camara.fov]);
+      }
+    );
   }
 
   // -------- Audio (Etapa 4) --------

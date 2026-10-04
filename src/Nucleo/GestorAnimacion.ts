@@ -231,6 +231,13 @@ export class GestorAnimacion {
         this.Modelos.EstablecerExpresion(Pista.Objetivo, Limitar(Valor[0], 0, 1));
       } else if (Pista.Tipo === 'Efecto' || Pista.Tipo === 'Luz') {
         this.AplicarEfectoLuz(Pista.Objetivo, Valor[0]);
+      } else if (Pista.Tipo === 'CamaraPosicion') {
+        this.Escena.Camara.position.set(Valor[0], Valor[1], Valor[2]);
+      } else if (Pista.Tipo === 'CamaraObjetivo') {
+        this.Escena.Controles.target.set(Valor[0], Valor[1], Valor[2]);
+      } else if (Pista.Tipo === 'CamaraFOV') {
+        this.Escena.Camara.fov = Valor[0];
+        this.Escena.Camara.updateProjectionMatrix();
       }
     }
   }
