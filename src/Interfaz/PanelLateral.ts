@@ -56,12 +56,30 @@ export class PanelLateral {
   private Deslizador(
     Padre: HTMLElement, Etiqueta: string, Min: number, Max: number, Paso: number, Valor: number,
     AlCambiar: (V: number) => void, Formato: (V: number) => string = (V) => V.toFixed(2),
-    AlKeyframe?: () => void
+    AlKeyframe?: () => void, OpcionesDrag?: { Tipo: 'Efecto' | 'Luz', Objetivo: string }
   ): { Entrada: HTMLInputElement; Salida: HTMLOutputElement } {
     const Grupo = document.createElement('div');
     Grupo.className = 'GrupoDeslizador';
+    
+    if (OpcionesDrag) {
+      Grupo.draggable = true;
+      Grupo.title = 'Arrastra a la línea de tiempo para crear un clip con transición.';
+      Grupo.ondragstart = (e) => {
+        if (e.dataTransfer) {
+          e.dataTransfer.setData('animador/arrastrar-efecto', JSON.stringify({
+            Tipo: OpcionesDrag.Tipo,
+            Objetivo: OpcionesDrag.Objetivo,
+            ValorBase: parseFloat(Entrada.value)
+          }));
+          e.dataTransfer.effectAllowed = 'copy';
+        }
+      };
+    }
+
     const L = document.createElement('label');
     L.textContent = Etiqueta;
+    if (OpcionesDrag) L.style.cursor = 'grab';
+
     const Entrada = document.createElement('input');
     Entrada.type = 'range';
     Entrada.min = String(Min); Entrada.max = String(Max);
@@ -930,15 +948,18 @@ export class PanelLateral {
     this.Nota(Cuerpo, 'Ajusta la exposición y las luces de la escena.');
     this.Deslizador(Cuerpo, 'Exposición (Tonemapping)', 0.1, 3.0, 0.1, 1.0, 
       (V) => Ctx.Escena.EstablecerExposicion(V), undefined, 
-      () => AgregarClave('Luz', 'Exposicion', Ctx.Escena.Renderer.toneMappingExposure));
+      () => AgregarClave('Luz', 'Exposicion', Ctx.Escena.Renderer.toneMappingExposure),
+      { Tipo: 'Luz', Objetivo: 'Exposicion' });
     
     this.Deslizador(Cuerpo, 'Intensidad Luz Direccional', 0, 5, 0.1, 2.2, 
       (V) => Ctx.Escena.EstablecerLuzDireccional(V), undefined,
-      () => AgregarClave('Luz', 'LuzDireccional', Ctx.Escena.LuzDireccional.intensity));
+      () => AgregarClave('Luz', 'LuzDireccional', Ctx.Escena.LuzDireccional.intensity),
+      { Tipo: 'Luz', Objetivo: 'LuzDireccional' });
     
     this.Deslizador(Cuerpo, 'Intensidad Luz Ambiental', 0, 3, 0.1, 0.85, 
       (V) => Ctx.Escena.EstablecerLuzAmbiental(V), undefined,
-      () => AgregarClave('Luz', 'LuzAmbiental', Ctx.Escena.LuzAmbiental.intensity));
+      () => AgregarClave('Luz', 'LuzAmbiental', Ctx.Escena.LuzAmbiental.intensity),
+      { Tipo: 'Luz', Objetivo: 'LuzAmbiental' });
 
     this.Nota(Cuerpo, 'Post-procesamiento y efectos de cámara.');
     
@@ -950,33 +971,39 @@ export class PanelLateral {
     const CasillaBloom = this.Casilla(Cuerpo, 'Brillo (Bloom)', false, (V) => Ctx.Escena.EstablecerBloom(V, FuerzaB, RadioB, UmbralB));
     this.Deslizador(Cuerpo, 'Fuerza Bloom', 0, 3, 0.1, FuerzaB, 
       (V) => { FuerzaB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
-      () => AgregarClave('Efecto', 'BloomFuerza', FuerzaB));
+      () => AgregarClave('Efecto', 'BloomFuerza', FuerzaB),
+      { Tipo: 'Efecto', Objetivo: 'BloomFuerza' });
     
     this.Deslizador(Cuerpo, 'Radio Bloom', 0, 1, 0.05, RadioB, 
       (V) => { RadioB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
-      () => AgregarClave('Efecto', 'BloomRadio', RadioB));
+      () => AgregarClave('Efecto', 'BloomRadio', RadioB),
+      { Tipo: 'Efecto', Objetivo: 'BloomRadio' });
     
     this.Deslizador(Cuerpo, 'Umbral Bloom', 0, 1, 0.05, UmbralB, 
       (V) => { UmbralB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
-      () => AgregarClave('Efecto', 'BloomUmbral', UmbralB));
+      () => AgregarClave('Efecto', 'BloomUmbral', UmbralB),
+      { Tipo: 'Efecto', Objetivo: 'BloomUmbral' });
 
     let RGBShift = 0.0025;
     const CasillaRGB = this.Casilla(Cuerpo, 'Aberración Cromática (RGB Shift)', false, (V) => Ctx.Escena.EstablecerAberracionCromatica(V, RGBShift));
     this.Deslizador(Cuerpo, 'Fuerza RGB Shift', 0, 0.02, 0.001, RGBShift, 
       (V) => { RGBShift = V; Ctx.Escena.EstablecerAberracionCromatica(CasillaRGB.checked, RGBShift); }, (V) => V.toFixed(4),
-      () => AgregarClave('Efecto', 'RGBShift', RGBShift));
+      () => AgregarClave('Efecto', 'RGBShift', RGBShift),
+      { Tipo: 'Efecto', Objetivo: 'RGBShift' });
     
     let IntensidadR = 0.35;
     const CasillaRuido = this.Casilla(Cuerpo, 'Ruido de Película (Film Grain)', false, (V) => Ctx.Escena.EstablecerRuido(V, IntensidadR));
     this.Deslizador(Cuerpo, 'Intensidad Ruido', 0, 1, 0.05, IntensidadR, 
       (V) => { IntensidadR = V; Ctx.Escena.EstablecerRuido(CasillaRuido.checked, IntensidadR); }, undefined,
-      () => AgregarClave('Efecto', 'RuidoIntensidad', IntensidadR));
+      () => AgregarClave('Efecto', 'RuidoIntensidad', IntensidadR),
+      { Tipo: 'Efecto', Objetivo: 'RuidoIntensidad' });
 
     let OscuridadV = 1.2;
     const CasillaVigneta = this.Casilla(Cuerpo, 'Viñeta (Bordes Oscuros)', false, (V) => Ctx.Escena.EstablecerVigneta(V, OscuridadV, 1.0));
     this.Deslizador(Cuerpo, 'Intensidad Viñeta', 0, 3, 0.1, OscuridadV, 
       (V) => { OscuridadV = V; Ctx.Escena.EstablecerVigneta(CasillaVigneta.checked, OscuridadV, 1.0); }, undefined,
-      () => AgregarClave('Efecto', 'VignetaOscuridad', OscuridadV));
+      () => AgregarClave('Efecto', 'VignetaOscuridad', OscuridadV),
+      { Tipo: 'Efecto', Objetivo: 'VignetaOscuridad' });
 
     const Fila = document.createElement('div');
     Fila.className = 'FilaControles';

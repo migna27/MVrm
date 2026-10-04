@@ -135,6 +135,42 @@ export class LineaTiempo {
       this.Dibujar();
     }, { passive: false });
 
+    // --- Arrastrar y Soltar Clips de Efecto ---
+    this.Lienzo.addEventListener('dragover', (E) => {
+      E.preventDefault();
+      if (E.dataTransfer) E.dataTransfer.dropEffect = 'copy';
+    });
+
+    this.Lienzo.addEventListener('drop', (E) => {
+      E.preventDefault();
+      const DatosTexto = E.dataTransfer?.getData('animador/arrastrar-efecto');
+      if (!DatosTexto) return;
+      try {
+        const Datos = JSON.parse(DatosTexto) as { Tipo: 'Efecto' | 'Luz', Objetivo: string, ValorBase: number };
+        const { X } = Posicion(E);
+        let TiempoSoltar = this.PixelesATiempo(X);
+        if (TiempoSoltar < 0) TiempoSoltar = 0;
+        
+        // Crear un "Clip" de efecto de 4 segundos con transición de 1 segundo
+        const Anim = this.Contexto.Animacion;
+        const Pista = Anim.ObtenerOCrearPista(Datos.Tipo, Datos.Objetivo, 'Manual');
+        const T0 = TiempoSoltar;
+        const T1 = Math.min(Anim.Duracion, T0 + 1);
+        const T2 = Math.min(Anim.Duracion, T0 + 3);
+        const T3 = Math.min(Anim.Duracion, T0 + 4);
+        
+        Anim.AgregarClave(Pista, T0, [0]);
+        if (T1 > T0) Anim.AgregarClave(Pista, T1, [Datos.ValorBase]);
+        if (T2 > T1) Anim.AgregarClave(Pista, T2, [Datos.ValorBase]);
+        if (T3 > T2) Anim.AgregarClave(Pista, T3, [0]);
+        
+        this.Contexto.NotificarEstado(`Efecto "${Datos.Objetivo}" añadido en ${T0.toFixed(1)}s`);
+        this.Dibujar();
+      } catch (err) {
+        console.error('Error al parsear el efecto soltado', err);
+      }
+    });
+
     // Clic derecho sobre la etiqueta de una pista: eliminarla
     this.Lienzo.addEventListener('contextmenu', (E) => {
       E.preventDefault();
@@ -285,17 +321,66 @@ export class LineaTiempo {
     C.lineTo(Math.min(Ancho, this.TiempoAPixeles(Duracion)), YCentro);
     C.stroke();
 
+    // Visualización de curva de automatización / bloque para pistas escalares
+    if (Pista.Tipo === 'Efecto' || Pista.Tipo === 'Luz' || Pista.Tipo === 'Expresion') {
+      if (Pista.Claves.length >= 2) {
+        let MaxValor = 0;
+        for (const C of Pista.Claves) MaxValor = Math.max(MaxValor, Math.abs(C.Valor[0]));
+        if (MaxValor < 0.001) MaxValor = 1;
+
+        C.beginPath();
+        const XIni = this.TiempoAPixeles(Pista.Claves[0].Tiempo);
+        C.moveTo(XIni, YFila + ALTO_FILA);
+        
+        for (const Clave of Pista.Claves) {
+          const X = this.TiempoAPixeles(Clave.Tiempo);
+          const VNorm = Math.abs(Clave.Valor[0]) / MaxValor;
+          const YClave = YFila + ALTO_FILA - (VNorm * (ALTO_FILA - 6)) - 3;
+          C.lineTo(X, YClave);
+        }
+        
+        const XFin = this.TiempoAPixeles(Pista.Claves[Pista.Claves.length - 1].Tiempo);
+        C.lineTo(XFin, YFila + ALTO_FILA);
+        C.fillStyle = Color + '44'; // Transparencia
+        C.fill();
+        
+        C.strokeStyle = Color;
+        C.lineWidth = 1.5;
+        C.beginPath();
+        for (let i = 0; i < Pista.Claves.length; i++) {
+          const X = this.TiempoAPixeles(Pista.Claves[i].Tiempo);
+          const VNorm = Math.abs(Pista.Claves[i].Valor[0]) / MaxValor;
+          const YClave = YFila + ALTO_FILA - (VNorm * (ALTO_FILA - 6)) - 3;
+          if (i === 0) C.moveTo(X, YClave);
+          else C.lineTo(X, YClave);
+        }
+        C.stroke();
+        C.lineWidth = 1;
+      }
+    }
+
     // Claves como rombos del color del grupo
     for (const Clave of Pista.Claves) {
       const X = this.TiempoAPixeles(Clave.Tiempo);
       if (X < ANCHO_ETIQUETAS - 8 || X > Ancho + 8) continue;
+      
+      let YDibujo = YCentro;
+      // Si es escalar, el rombo sigue la curva
+      if ((Pista.Tipo === 'Efecto' || Pista.Tipo === 'Luz' || Pista.Tipo === 'Expresion') && Pista.Claves.length > 0) {
+         let MaxValor = 0;
+         for (const C of Pista.Claves) MaxValor = Math.max(MaxValor, Math.abs(C.Valor[0]));
+         if (MaxValor < 0.001) MaxValor = 1;
+         const VNorm = Math.abs(Clave.Valor[0]) / MaxValor;
+         YDibujo = YFila + ALTO_FILA - (VNorm * (ALTO_FILA - 6)) - 3;
+      }
+
       const Seleccionada = this.Seleccion?.ClaveId === Clave.Id;
       C.fillStyle = Color;
       C.beginPath();
-      C.moveTo(X, YCentro - RADIO_CLAVE);
-      C.lineTo(X + RADIO_CLAVE, YCentro);
-      C.lineTo(X, YCentro + RADIO_CLAVE);
-      C.lineTo(X - RADIO_CLAVE, YCentro);
+      C.moveTo(X, YDibujo - RADIO_CLAVE);
+      C.lineTo(X + RADIO_CLAVE, YDibujo);
+      C.lineTo(X, YDibujo + RADIO_CLAVE);
+      C.lineTo(X - RADIO_CLAVE, YDibujo);
       C.closePath();
       C.fill();
       if (Seleccionada) {
