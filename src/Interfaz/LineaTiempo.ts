@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { ContextoAplicacion } from '../Contexto';
-import { PistaAnimacion, COLORES_GRUPO, PRIORIDAD_GRUPOS } from '../Tipos';
+import { PistaAnimacion, COLORES_GRUPO, PRIORIDAD_GRUPOS, GrupoPista } from '../Tipos';
 import { FormatearTiempo, Limitar } from '../Utilidades';
 
 const ALTO_REGLA = 26;
@@ -23,6 +23,12 @@ export interface SeleccionClave {
   ClaveId: string;
 }
 
+interface FilaTimeline {
+  TipoFila: 'Grupo' | 'Pista';
+  Grupo: GrupoPista;
+  Pista?: PistaAnimacion;
+}
+
 export class LineaTiempo {
   public PxPorSegundo = 80;
   public Seleccion: SeleccionClave | null = null;
@@ -31,6 +37,7 @@ export class LineaTiempo {
   private DesplazamientoX = 0; // Desplazamiento horizontal en píxeles
   private DesplazamientoY = 0; // Desplazamiento vertical en píxeles
   private Modo: ModoArrastre = 'Ninguno';
+  private GruposExpandidos: Record<string, boolean> = { 'Manual': true, 'Preajuste': true };
 
   constructor(private Lienzo: HTMLCanvasElement, private Contexto: ContextoAplicacion) {
     this.Contexto2D = Lienzo.getContext('2d')!;
@@ -38,11 +45,22 @@ export class LineaTiempo {
     new ResizeObserver(() => this.Dibujar()).observe(Lienzo.parentElement!);
   }
 
-  /** Pistas ordenadas para mostrar (agrupadas por prioridad de grupo). */
-  private ObtenerPistasOrdenadas(): PistaAnimacion[] {
-    return [...this.Contexto.Animacion.Pistas].sort(
-      (A, B) => PRIORIDAD_GRUPOS.indexOf(A.Grupo) - PRIORIDAD_GRUPOS.indexOf(B.Grupo)
-    );
+  /** Genera la lista de filas (cabeceras de grupo y pistas expandidas) a renderizar. */
+  private ObtenerFilas(): FilaTimeline[] {
+    const Pistas = this.Contexto.Animacion.Pistas;
+    const Filas: FilaTimeline[] = [];
+    for (const Grupo of PRIORIDAD_GRUPOS) {
+      const PistasGrupo = Pistas.filter(P => P.Grupo === Grupo);
+      if (PistasGrupo.length > 0) {
+        Filas.push({ TipoFila: 'Grupo', Grupo });
+        if (this.GruposExpandidos[Grupo]) {
+          for (const Pista of PistasGrupo) {
+            Filas.push({ TipoFila: 'Pista', Grupo, Pista });
+          }
+        }
+      }
+    }
+    return Filas;
   }
 
   // --------------------------------------------------------------------------
@@ -58,9 +76,9 @@ export class LineaTiempo {
   }
 
   private AlturaTotal(): number {
-    const Pistas = this.ObtenerPistasOrdenadas();
+    const Filas = this.ObtenerFilas();
     const FilasAudio = this.Contexto.Audio.Buffer ? 1 : 0;
-    return ALTO_REGLA + Pistas.length * ALTO_FILA + FilasAudio * ALTO_FILA_AUDIO + 12;
+    return ALTO_REGLA + Filas.length * ALTO_FILA + FilasAudio * ALTO_FILA_AUDIO + 12;
   }
 
   // --------------------------------------------------------------------------
@@ -76,6 +94,21 @@ export class LineaTiempo {
     this.Lienzo.addEventListener('mousedown', (E) => {
       const { X, Y } = Posicion(E);
       const Anim = this.Contexto.Animacion;
+
+      // Toggle grupo si hace clic en la columna de etiquetas
+      if (X <= ANCHO_ETIQUETAS) {
+        const Filas = this.ObtenerFilas();
+        for (let I = 0; I < Filas.length; I++) {
+          const YFila = ALTO_REGLA + I * ALTO_FILA - this.DesplazamientoY;
+          if (Y >= YFila && Y <= YFila + ALTO_FILA) {
+            if (Filas[I].TipoFila === 'Grupo') {
+              this.GruposExpandidos[Filas[I].Grupo] = !this.GruposExpandidos[Filas[I].Grupo];
+              this.Dibujar();
+              return;
+            }
+          }
+        }
+      }
 
       // Clic en una clave: seleccionarla y comenzar a moverla
       const Tocado = this.BuscarClaveEn(X, Y);
@@ -176,11 +209,22 @@ export class LineaTiempo {
       E.preventDefault();
       const { X, Y } = Posicion(E);
       if (X < ANCHO_ETIQUETAS) {
-        const Indice = Math.floor((Y + this.DesplazamientoY - ALTO_REGLA) / ALTO_FILA);
-        const Pistas = this.ObtenerPistasOrdenadas();
-        if (Indice >= 0 && Indice < Pistas.length) {
-          if (confirm(`¿Eliminar la pista "${Pistas[Indice].Nombre}"?`)) {
-            this.Contexto.Animacion.EliminarPista(Pistas[Indice].Id);
+        const Filas = this.ObtenerFilas();
+        for (let I = 0; I < Filas.length; I++) {
+          const YFila = ALTO_REGLA + I * ALTO_FILA - this.DesplazamientoY;
+          if (Y >= YFila && Y <= YFila + ALTO_FILA) {
+            if (Filas[I].TipoFila === 'Pista') {
+              const Pista = Filas[I].Pista!;
+              if (confirm(`¿Eliminar la pista "${Pista.Nombre}"?`)) {
+                this.Contexto.Animacion.EliminarPista(Pista.Id);
+              }
+            } else if (Filas[I].TipoFila === 'Grupo') {
+              if (confirm(`¿Eliminar TODAS las pistas del grupo "${Filas[I].Grupo}"?`)) {
+                const PistasGrupo = this.Contexto.Animacion.Pistas.filter(P => P.Grupo === Filas[I].Grupo);
+                for (const P of PistasGrupo) this.Contexto.Animacion.EliminarPista(P.Id);
+              }
+            }
+            return;
           }
         }
       }
@@ -189,13 +233,15 @@ export class LineaTiempo {
 
   /** Localiza la clave bajo el cursor (si existe). */
   private BuscarClaveEn(X: number, Y: number): SeleccionClave | null {
-    const Pistas = this.ObtenerPistasOrdenadas();
-    for (let I = 0; I < Pistas.length; I++) {
-      const YFila = ALTO_REGLA + I * ALTO_FILA + ALTO_FILA / 2 - this.DesplazamientoY;
-      if (Math.abs(Y - YFila) > ALTO_FILA / 2) continue;
-      for (const Clave of Pistas[I].Claves) {
+    const Filas = this.ObtenerFilas();
+    for (let I = 0; I < Filas.length; I++) {
+      if (Filas[I].TipoFila !== 'Pista') continue;
+      const Pista = Filas[I].Pista!;
+      const YFilaCentro = ALTO_REGLA + I * ALTO_FILA + ALTO_FILA / 2 - this.DesplazamientoY;
+      if (Math.abs(Y - YFilaCentro) > ALTO_FILA / 2) continue;
+      for (const Clave of Pista.Claves) {
         if (Math.abs(X - this.TiempoAPixeles(Clave.Tiempo)) <= RADIO_CLAVE + 2) {
-          return { PistaId: Pistas[I].Id, ClaveId: Clave.Id };
+          return { PistaId: Pista.Id, ClaveId: Clave.Id };
         }
       }
     }
@@ -226,7 +272,7 @@ export class LineaTiempo {
     C.clearRect(0, 0, Ancho, Alto);
 
     const Anim = this.Contexto.Animacion;
-    const Pistas = this.ObtenerPistasOrdenadas();
+    const Filas = this.ObtenerFilas();
 
     // Fondo general
     C.fillStyle = '#14161c';
@@ -235,15 +281,27 @@ export class LineaTiempo {
     this.DibujarRegla(C, Ancho, Anim.Duracion);
 
     // Filas de pistas
-    for (let I = 0; I < Pistas.length; I++) {
+    for (let I = 0; I < Filas.length; I++) {
       const YFila = ALTO_REGLA + I * ALTO_FILA - this.DesplazamientoY;
       if (YFila + ALTO_FILA < ALTO_REGLA || YFila > Alto) continue;
-      this.DibujarFilaPista(C, Pistas[I], YFila, Ancho, Anim.Duracion);
+      if (Filas[I].TipoFila === 'Pista') {
+        this.DibujarFilaPista(C, Filas[I].Pista!, YFila, Ancho, Anim.Duracion, I);
+      } else {
+        // Dibujar fila de grupo (fondo)
+        C.fillStyle = '#1a1d24';
+        C.fillRect(ANCHO_ETIQUETAS, YFila, Ancho - ANCHO_ETIQUETAS, ALTO_FILA);
+        // Linea separadora
+        C.strokeStyle = '#2a2f3b';
+        C.beginPath();
+        C.moveTo(ANCHO_ETIQUETAS, YFila + ALTO_FILA);
+        C.lineTo(Ancho, YFila + ALTO_FILA);
+        C.stroke();
+      }
     }
 
     // Fila de audio con su forma de onda
     if (this.Contexto.Audio.Buffer) {
-      const YAudio = ALTO_REGLA + Pistas.length * ALTO_FILA - this.DesplazamientoY;
+      const YAudio = ALTO_REGLA + Filas.length * ALTO_FILA - this.DesplazamientoY;
       this.DibujarFilaAudio(C, YAudio, Ancho);
     }
 
@@ -265,7 +323,7 @@ export class LineaTiempo {
     C.lineTo(ANCHO_ETIQUETAS + 0.5, Alto);
     C.stroke();
 
-    this.DibujarEtiquetas(C, Pistas, Alto);
+    this.DibujarEtiquetas(C, Filas, Alto);
   }
 
   private DibujarRegla(C: CanvasRenderingContext2D, Ancho: number, Duracion: number): void {
@@ -305,9 +363,9 @@ export class LineaTiempo {
   }
 
   private DibujarFilaPista(
-    C: CanvasRenderingContext2D, Pista: PistaAnimacion, YFila: number, Ancho: number, Duracion: number
+    C: CanvasRenderingContext2D, Pista: PistaAnimacion, YFila: number, Ancho: number, Duracion: number, IndiceAlterno: number
   ): void {
-    C.fillStyle = (Math.floor((YFila - ALTO_REGLA + this.DesplazamientoY) / ALTO_FILA) % 2 === 0)
+    C.fillStyle = (IndiceAlterno % 2 === 0)
       ? '#161922' : '#181c26';
     C.fillRect(ANCHO_ETIQUETAS, YFila, Ancho - ANCHO_ETIQUETAS, ALTO_FILA);
 
@@ -436,33 +494,57 @@ export class LineaTiempo {
     C.fill();
   }
 
-  private DibujarEtiquetas(C: CanvasRenderingContext2D, Pistas: PistaAnimacion[], Alto: number): void {
+  private DibujarEtiquetas(C: CanvasRenderingContext2D, Filas: FilaTimeline[], Alto: number): void {
     C.font = '11px Segoe UI, sans-serif';
     C.textAlign = 'left';
 
-    // Título de la regla
     C.fillStyle = '#8b93a5';
-    C.fillText('Pistas', 10, 16);
+    C.fillText('Capas / Pistas', 10, 16);
 
-    for (let I = 0; I < Pistas.length; I++) {
+    for (let I = 0; I < Filas.length; I++) {
       const YFila = ALTO_REGLA + I * ALTO_FILA - this.DesplazamientoY;
       if (YFila + ALTO_FILA < ALTO_REGLA || YFila > Alto) continue;
       const YCentro = YFila + ALTO_FILA / 2;
 
-      // Pastilla de color del grupo
-      C.fillStyle = COLORES_GRUPO[Pistas[I].Grupo];
-      C.beginPath();
-      C.roundRect(8, YCentro - 5, 10, 10, 3);
-      C.fill();
+      if (Filas[I].TipoFila === 'Grupo') {
+        C.fillStyle = '#1a1d24';
+        C.fillRect(0, YFila, ANCHO_ETIQUETAS, ALTO_FILA);
+        
+        const ColorG = COLORES_GRUPO[Filas[I].Grupo];
+        C.fillStyle = ColorG;
+        C.beginPath();
+        C.roundRect(8, YCentro - 6, 4, 12, 2);
+        C.fill();
+        
+        C.fillStyle = '#ffffff';
+        C.font = 'bold 11px Segoe UI, sans-serif';
+        const Simbolo = this.GruposExpandidos[Filas[I].Grupo] ? '▼' : '▶';
+        C.fillText(`${Simbolo} Capa: ${Filas[I].Grupo}`, 18, YCentro + 4);
+        C.font = '11px Segoe UI, sans-serif';
+      } else {
+        const Pista = Filas[I].Pista!;
+        C.fillStyle = COLORES_GRUPO[Pista.Grupo];
+        C.beginPath();
+        C.roundRect(16, YCentro - 4, 8, 8, 2);
+        C.fill();
 
-      C.fillStyle = '#dfe4ee';
-      let Nombre = Pistas[I].Nombre;
-      if (Nombre.length > 24) Nombre = Nombre.slice(0, 23) + '…';
-      C.fillText(Nombre, 24, YCentro + 4);
+        C.fillStyle = '#a5b0c4';
+        let Nombre = Pista.Nombre;
+        const Prefijo = `${Filas[I].Grupo} — `;
+        if (Nombre.startsWith(Prefijo)) Nombre = Nombre.substring(Prefijo.length);
+        if (Nombre.length > 22) Nombre = Nombre.slice(0, 21) + '…';
+        C.fillText(Nombre, 30, YCentro + 4);
+      }
+      
+      C.strokeStyle = '#2a2f3b';
+      C.beginPath();
+      C.moveTo(0, YFila + ALTO_FILA);
+      C.lineTo(ANCHO_ETIQUETAS, YFila + ALTO_FILA);
+      C.stroke();
     }
 
     if (this.Contexto.Audio.Buffer) {
-      const YAudio = ALTO_REGLA + Pistas.length * ALTO_FILA - this.DesplazamientoY;
+      const YAudio = ALTO_REGLA + Filas.length * ALTO_FILA - this.DesplazamientoY;
       if (YAudio > ALTO_REGLA - ALTO_FILA_AUDIO && YAudio < Alto) {
         C.fillStyle = '#6cc8ff';
         C.beginPath();
