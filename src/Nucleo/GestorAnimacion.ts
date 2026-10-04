@@ -11,6 +11,7 @@ import {
 } from '../Tipos';
 import { GenerarId, InterpolacionSuave, Limitar } from '../Utilidades';
 import { GestorModelos, NOMBRES_HUESOS_LEGIBLES } from './GestorModelos';
+import { GestorEscena } from './GestorEscena';
 
 const EPSILON_CLAVE = 0.004; // Diferencia mínima de tiempo para fusionar claves
 
@@ -24,7 +25,7 @@ export class GestorAnimacion {
   /** Se dispara cuando cambian las pistas (agregar, mover o eliminar claves). */
   public AlCambiarPistas: () => void = () => {};
 
-  constructor(private Modelos: GestorModelos) {}
+  constructor(private Modelos: GestorModelos, private Escena: GestorEscena) {}
 
   // --------------------------------------------------------------------------
   // Administración de pistas y claves
@@ -228,7 +229,27 @@ export class GestorAnimacion {
         this.Modelos.EstablecerPosicionHueso(Pista.Objetivo, new THREE.Vector3(Valor[0], Valor[1], Valor[2]));
       } else if (Pista.Tipo === 'Expresion') {
         this.Modelos.EstablecerExpresion(Pista.Objetivo, Limitar(Valor[0], 0, 1));
+      } else if (Pista.Tipo === 'Efecto' || Pista.Tipo === 'Luz') {
+        this.AplicarEfectoLuz(Pista.Objetivo, Valor[0]);
       }
+    }
+  }
+
+  private AplicarEfectoLuz(Objetivo: string, Valor: number): void {
+    if (!this.Escena) return;
+    switch (Objetivo) {
+      case 'Exposicion': this.Escena.EstablecerExposicion(Valor); break;
+      case 'LuzDireccional': this.Escena.EstablecerLuzDireccional(Valor); break;
+      case 'LuzAmbiental': this.Escena.EstablecerLuzAmbiental(Valor); break;
+      case 'BloomFuerza': 
+        this.Escena.BloomFuerza = Valor;
+        this.Escena.EstablecerBloom(this.Escena.BloomActivo, Valor); 
+        break;
+      case 'BloomRadio': this.Escena.EstablecerBloom(this.Escena.BloomActivo, undefined, Valor); break;
+      case 'BloomUmbral': this.Escena.EstablecerBloom(this.Escena.BloomActivo, undefined, undefined, Valor); break;
+      case 'RGBShift': this.Escena.EstablecerAberracionCromatica(this.Escena.AberracionCromaticaActiva, Valor); break;
+      case 'RuidoIntensidad': this.Escena.EstablecerRuido(this.Escena.RuidoActivo, Valor); break;
+      case 'VignetaOscuridad': this.Escena.EstablecerVigneta(this.Escena.VignetaActiva, Valor); break;
     }
   }
 

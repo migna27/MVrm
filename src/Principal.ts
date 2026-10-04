@@ -31,7 +31,7 @@ const Escena = new GestorEscena();
 Escena.Inicializar(document.getElementById('Visor3D')!);
 
 const Modelos = new GestorModelos(Escena.Escena);
-const Animacion = new GestorAnimacion(Modelos);
+const Animacion = new GestorAnimacion(Modelos, Escena);
 const Audio = new GestorAudio();
 const Efectos = new GestorEfectos(Escena.Escena);
 const Tracking = new GestorTracking();

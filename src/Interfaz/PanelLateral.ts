@@ -55,7 +55,8 @@ export class PanelLateral {
 
   private Deslizador(
     Padre: HTMLElement, Etiqueta: string, Min: number, Max: number, Paso: number, Valor: number,
-    AlCambiar: (V: number) => void, Formato: (V: number) => string = (V) => V.toFixed(2)
+    AlCambiar: (V: number) => void, Formato: (V: number) => string = (V) => V.toFixed(2),
+    AlKeyframe?: () => void
   ): { Entrada: HTMLInputElement; Salida: HTMLOutputElement } {
     const Grupo = document.createElement('div');
     Grupo.className = 'GrupoDeslizador';
@@ -72,7 +73,32 @@ export class PanelLateral {
       Salida.textContent = Formato(V);
       AlCambiar(V);
     };
-    Grupo.append(L, Entrada, Salida);
+    
+    if (AlKeyframe) {
+      const BtnClave = document.createElement('button');
+      BtnClave.textContent = '⭐';
+      BtnClave.className = 'BotonIcono';
+      BtnClave.title = 'Agregar fotograma clave en el tiempo actual';
+      BtnClave.style.marginLeft = 'auto';
+      BtnClave.style.background = 'none';
+      BtnClave.style.border = 'none';
+      BtnClave.style.cursor = 'pointer';
+      BtnClave.style.filter = 'grayscale(100%)';
+      BtnClave.onmouseover = () => BtnClave.style.filter = 'none';
+      BtnClave.onmouseout = () => BtnClave.style.filter = 'grayscale(100%)';
+      BtnClave.onclick = AlKeyframe;
+      
+      const Cabecera = document.createElement('div');
+      Cabecera.style.display = 'flex';
+      Cabecera.style.justifyContent = 'space-between';
+      Cabecera.style.alignItems = 'center';
+      Cabecera.style.width = '100%';
+      Cabecera.append(L, BtnClave);
+      Grupo.append(Cabecera, Entrada, Salida);
+    } else {
+      Grupo.append(L, Entrada, Salida);
+    }
+    
     Padre.appendChild(Grupo);
     return { Entrada, Salida };
   }
@@ -896,10 +922,23 @@ export class PanelLateral {
     const Cuerpo = this.Seccion(this.RaizIzq, 'Iluminación y Efectos');
     const Ctx = this.Contexto;
 
+    const AgregarClave = (Tipo: 'Efecto' | 'Luz', Objetivo: string, Valor: number) => {
+      const Pista = Ctx.Animacion.ObtenerOCrearPista(Tipo, Objetivo, 'Manual');
+      Ctx.Animacion.AgregarClave(Pista, Ctx.Animacion.TiempoActual, [Valor]);
+    };
+
     this.Nota(Cuerpo, 'Ajusta la exposición y las luces de la escena.');
-    this.Deslizador(Cuerpo, 'Exposición (Tonemapping)', 0.1, 3.0, 0.1, 1.0, (V) => Ctx.Escena.EstablecerExposicion(V));
-    this.Deslizador(Cuerpo, 'Intensidad Luz Direccional', 0, 5, 0.1, 2.2, (V) => Ctx.Escena.EstablecerLuzDireccional(V));
-    this.Deslizador(Cuerpo, 'Intensidad Luz Ambiental', 0, 3, 0.1, 0.85, (V) => Ctx.Escena.EstablecerLuzAmbiental(V));
+    this.Deslizador(Cuerpo, 'Exposición (Tonemapping)', 0.1, 3.0, 0.1, 1.0, 
+      (V) => Ctx.Escena.EstablecerExposicion(V), undefined, 
+      () => AgregarClave('Luz', 'Exposicion', Ctx.Escena.Renderer.toneMappingExposure));
+    
+    this.Deslizador(Cuerpo, 'Intensidad Luz Direccional', 0, 5, 0.1, 2.2, 
+      (V) => Ctx.Escena.EstablecerLuzDireccional(V), undefined,
+      () => AgregarClave('Luz', 'LuzDireccional', Ctx.Escena.LuzDireccional.intensity));
+    
+    this.Deslizador(Cuerpo, 'Intensidad Luz Ambiental', 0, 3, 0.1, 0.85, 
+      (V) => Ctx.Escena.EstablecerLuzAmbiental(V), undefined,
+      () => AgregarClave('Luz', 'LuzAmbiental', Ctx.Escena.LuzAmbiental.intensity));
 
     this.Nota(Cuerpo, 'Post-procesamiento y efectos de cámara.');
     
@@ -909,19 +948,35 @@ export class PanelLateral {
     let UmbralB = 0.85;
 
     const CasillaBloom = this.Casilla(Cuerpo, 'Brillo (Bloom)', false, (V) => Ctx.Escena.EstablecerBloom(V, FuerzaB, RadioB, UmbralB));
-    this.Deslizador(Cuerpo, 'Fuerza Bloom', 0, 3, 0.1, FuerzaB, (V) => { FuerzaB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
-    this.Deslizador(Cuerpo, 'Radio Bloom', 0, 1, 0.05, RadioB, (V) => { RadioB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
-    this.Deslizador(Cuerpo, 'Umbral Bloom', 0, 1, 0.05, UmbralB, (V) => { UmbralB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); });
+    this.Deslizador(Cuerpo, 'Fuerza Bloom', 0, 3, 0.1, FuerzaB, 
+      (V) => { FuerzaB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
+      () => AgregarClave('Efecto', 'BloomFuerza', FuerzaB));
+    
+    this.Deslizador(Cuerpo, 'Radio Bloom', 0, 1, 0.05, RadioB, 
+      (V) => { RadioB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
+      () => AgregarClave('Efecto', 'BloomRadio', RadioB));
+    
+    this.Deslizador(Cuerpo, 'Umbral Bloom', 0, 1, 0.05, UmbralB, 
+      (V) => { UmbralB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
+      () => AgregarClave('Efecto', 'BloomUmbral', UmbralB));
 
-    this.Casilla(Cuerpo, 'Aberración Cromática (RGB Shift)', false, (V) => Ctx.Escena.EstablecerAberracionCromatica(V, 0.0025));
+    let RGBShift = 0.0025;
+    const CasillaRGB = this.Casilla(Cuerpo, 'Aberración Cromática (RGB Shift)', false, (V) => Ctx.Escena.EstablecerAberracionCromatica(V, RGBShift));
+    this.Deslizador(Cuerpo, 'Fuerza RGB Shift', 0, 0.02, 0.001, RGBShift, 
+      (V) => { RGBShift = V; Ctx.Escena.EstablecerAberracionCromatica(CasillaRGB.checked, RGBShift); }, (V) => V.toFixed(4),
+      () => AgregarClave('Efecto', 'RGBShift', RGBShift));
     
     let IntensidadR = 0.35;
     const CasillaRuido = this.Casilla(Cuerpo, 'Ruido de Película (Film Grain)', false, (V) => Ctx.Escena.EstablecerRuido(V, IntensidadR));
-    this.Deslizador(Cuerpo, 'Intensidad Ruido', 0, 1, 0.05, IntensidadR, (V) => { IntensidadR = V; Ctx.Escena.EstablecerRuido(CasillaRuido.checked, IntensidadR); });
+    this.Deslizador(Cuerpo, 'Intensidad Ruido', 0, 1, 0.05, IntensidadR, 
+      (V) => { IntensidadR = V; Ctx.Escena.EstablecerRuido(CasillaRuido.checked, IntensidadR); }, undefined,
+      () => AgregarClave('Efecto', 'RuidoIntensidad', IntensidadR));
 
     let OscuridadV = 1.2;
     const CasillaVigneta = this.Casilla(Cuerpo, 'Viñeta (Bordes Oscuros)', false, (V) => Ctx.Escena.EstablecerVigneta(V, OscuridadV, 1.0));
-    this.Deslizador(Cuerpo, 'Intensidad Viñeta', 0, 3, 0.1, OscuridadV, (V) => { OscuridadV = V; Ctx.Escena.EstablecerVigneta(CasillaVigneta.checked, OscuridadV, 1.0); });
+    this.Deslizador(Cuerpo, 'Intensidad Viñeta', 0, 3, 0.1, OscuridadV, 
+      (V) => { OscuridadV = V; Ctx.Escena.EstablecerVigneta(CasillaVigneta.checked, OscuridadV, 1.0); }, undefined,
+      () => AgregarClave('Efecto', 'VignetaOscuridad', OscuridadV));
 
     const Fila = document.createElement('div');
     Fila.className = 'FilaControles';

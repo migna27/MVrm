@@ -32,8 +32,8 @@ export class GestorEscena {
   
   private Contenedor!: HTMLElement;
 
-  private LuzDireccional!: THREE.DirectionalLight;
-  private LuzAmbiental!: THREE.AmbientLight;
+  public LuzDireccional!: THREE.DirectionalLight;
+  public LuzAmbiental!: THREE.AmbientLight;
   private Rejilla!: THREE.GridHelper;
 
   public ModeloFondo: THREE.Object3D | null = null;
