@@ -1,8 +1,8 @@
-# Animador VRM (v 1.0.1)
+# Animador VRM (v Alpha 1.0.1)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (v 1.0.1)
+## Características (v Alpha 1.0.1)
 
 - **Motor Generativo Text-to-Motion (MDM):** IA heurística capaz de interpretar indicaciones en texto (como "saltar", "agacharse", "girar") y sintetizar curvas matemáticas de movimiento perfectas en el espacio 3D, resolviendo las limitaciones del traqueo de video plano.
 - **Motor RTMPose (Experimental):** Implementación preliminar de inferencia ONNX para el motor RTMPose.
