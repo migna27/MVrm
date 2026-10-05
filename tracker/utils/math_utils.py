@@ -302,16 +302,33 @@ def _mundo_padre(mundo, hueso):
     return Rotation.identity()
 
 
+# Poses locales de descanso para cuando el hueso se pierde. 
+# Si no esta definido, se asume Rotation.identity() (recto respecto a su padre).
+_REPOSO_LOCAL = {
+    # Los brazos caen hacia abajo y un poco hacia afuera (para no traspasar el torso).
+    # leftUpperArm en T-Pose apunta a [1, 0, 0]. Para que apunte abajo: rotamos hacia [0.2, -0.95, 0]
+    'leftUpperArm': rotacion_entre([1, 0, 0], [0.2, -0.95, 0]),
+    'rightUpperArm': rotacion_entre([-1, 0, 0], [-0.2, -0.95, 0]),
+    # Los codos un poco flexionados hacia adelante da un aspecto mas natural
+    'leftLowerArm': rotacion_entre([1, 0, 0], [0.95, 0, 0.2]),
+    'rightLowerArm': rotacion_entre([-1, 0, 0], [-0.95, 0, 0.2]),
+    # Las manos relajadas caen un poco (hacia -Y)
+    'leftHand': rotacion_entre([1, 0, 0], [0.9, -0.3, 0]),
+    'rightHand': rotacion_entre([-1, 0, 0], [-0.9, -0.3, 0]),
+}
+
+
 def rotaciones_locales(mundo):
     locales = {}
     for hueso in _JERARQUIA:
-        # Si el hueso no esta en el mundo (por baja visibilidad), asumimos que esta en su posicion de reposo global
-        r_mundo = mundo.get(hueso, Rotation.identity())
-        
-        # Para que el hueso se quede en reposo GLOBAL (ej. brazos colgando hacia abajo en T-pose, o piernas rectas),
-        # su rotacion local debe compensar la rotacion del padre.
-        r_local = _mundo_padre(mundo, hueso).inv() * r_mundo
-        
+        if hueso in mundo:
+            # Si el hueso fue detectado, calculamos su rotacion local aislando la rotacion del padre
+            r_mundo = mundo[hueso]
+            r_local = _mundo_padre(mundo, hueso).inv() * r_mundo
+        else:
+            # Si el hueso se pierde, usamos su pose relajada predeterminada en espacio LOCAL
+            r_local = _REPOSO_LOCAL.get(hueso, Rotation.identity())
+            
         if hueso.endswith('Hand'):
             r_local = limitar_rotacion(r_local, LIMITE_MUNECA)
             
