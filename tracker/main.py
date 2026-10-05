@@ -32,9 +32,8 @@ def export_to_vrm_format(tracks_smoothed, duration, output_json):
 
 def main():
     parser = argparse.ArgumentParser(description="Motor de Animación e Inteligencia Artificial")
-    parser.add_argument('--engine', type=str, choices=['mediapipe', 'rtmpose', 'mdm'], default='mediapipe')
+    parser.add_argument('--engine', type=str, choices=['mediapipe'], default='mediapipe')
     parser.add_argument('--input', type=str, help='Ruta del video o ID de camara (ej: 0)')
-    parser.add_argument('--prompt', type=str, help='Texto descriptivo (Solo para MDM)')
     parser.add_argument('--output', type=str, help='Ruta del JSON de salida (Requerido en modo archivo)')
     
     # Nuevos parametros para Streaming en vivo (VMC/OSC)
@@ -70,21 +69,6 @@ def main():
             sys.exit(1)
         from engines.mediapipe_engine import run_mediapipe_tracking
         tracks_raw, duration = run_mediapipe_tracking(inp, live=args.live, osc_client=osc_client)
-        
-    elif args.engine == 'rtmpose':
-        inp = args.input if args.input else ("0" if args.live else None)
-        if inp is None:
-            print("[ERROR] El motor rtmpose requiere --input (o usa --live)")
-            sys.exit(1)
-        from engines.rtmpose_engine import run_rtmpose_tracking
-        tracks_raw, duration = run_rtmpose_tracking(inp, live=args.live, osc_client=osc_client)
-        
-    elif args.engine == 'mdm':
-        if not args.prompt:
-            print("[ERROR] El motor mdm requiere --prompt")
-            sys.exit(1)
-        from engines.mdm_engine import run_mdm_generation
-        tracks_raw, duration = run_mdm_generation(args.prompt)
         
     if args.live:
         print("[INFO] Streaming finalizado. Cerrando motor.")
