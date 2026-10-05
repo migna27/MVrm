@@ -23,7 +23,7 @@ def calculate_full_body_angles(landmarks):
     
     def pt(idx):
         lm = landmarks[idx]
-        return np.array([lm.x, -lm.y, lm.z]), lm.visibility
+        return np.array([lm.x, -lm.y, -lm.z]), lm.visibility
         
     ls, ls_v = pt(11)
     rs, rs_v = pt(12)
@@ -138,16 +138,14 @@ def smooth_tracks(tracks_raw, window=5, polyorder=2):
     return tracks_smoothed
 
 def calculate_hand_angles(landmarks, parent_world_rot=None, is_right=False):
-    import math
     import numpy as np
     from scipy.spatial.transform import Rotation
     
     angles = {}
     prefix = 'right' if is_right else 'left'
     
-    # 3D points: MediaPipe X is right, Y is down.
-    # Mapeamos a X=right, Y=up, Z=depth
-    def pt(idx): return np.array([landmarks[idx].x, -landmarks[idx].y, landmarks[idx].z])
+    # X=right, Y=up, Z=depth (inverted so +Z is towards camera, matching VRM)
+    def pt(idx): return np.array([landmarks[idx].x, -landmarks[idx].y, -landmarks[idx].z])
     
     wrist = pt(0)
     index_mcp = pt(5)
@@ -159,26 +157,35 @@ def calculate_hand_angles(landmarks, parent_world_rot=None, is_right=False):
     
     if x_len > 1e-5:
         x_obs = x_obs / x_len
-        z_obs = index_mcp - pinky_mcp
-        z_len = np.linalg.norm(z_obs)
-        if z_len > 1e-5:
-            z_obs = z_obs / z_len
-            y_obs = np.cross(z_obs, x_obs)
-            y_obs /= (np.linalg.norm(y_obs) + 1e-6)
-            z_obs = np.cross(x_obs, y_obs)
+        
+        # Robust Palm Normal using Cross Product of Metacarpals
+        v1 = index_mcp - wrist
+        v2 = pinky_mcp - wrist
+        
+        normal = np.cross(v1, v2)
+        n_len = np.linalg.norm(normal)
+        
+        if n_len > 1e-5:
+            normal = normal / n_len
             
             if not is_right:
-                R_rest = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).T
+                # Left Hand
+                local_y = normal
+                local_x = x_obs
             else:
-                R_rest = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]]).T
+                # Right Hand
+                local_y = -normal
+                local_x = -x_obs
                 
-            R_obs = np.column_stack((x_obs, y_obs, z_obs))
+            local_z = np.cross(local_x, local_y)
+            local_z /= (np.linalg.norm(local_z) + 1e-6)
+            
+            local_y = np.cross(local_z, local_x)
+            
+            R_world = np.column_stack((local_x, local_y, local_z))
             
             try:
-                R_world = R_obs @ np.linalg.inv(R_rest)
                 r_world = Rotation.from_matrix(R_world)
-                
-                # Apply local rotation math
                 if parent_world_rot is not None:
                     r_local = parent_world_rot.inv() * r_world
                 else:

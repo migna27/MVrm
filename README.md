@@ -1,8 +1,8 @@
-# Animador VRM (v a-1.1.1)
+# Animador VRM (v a-1.1.2)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (v a-1.1.1)
+## Características (v a-1.1.2)
 
 - **Cinemática Inversa y Directa (Local Rotations):** El motor matemático ahora calcula la rotación relativa de cada hueso respecto a su hueso padre (inv(parent) * child), solucionando deformaciones de muñecas y codos rotos al interpretar correctamente la jerarquía ósea del VRM.
 - **Motor de Tracking Optimizado:** Eliminación de modelos redundantes o inestables (RTMPose, MDM), dejando exclusivamente a MediaPipe Holistic local por su velocidad y robustez.
