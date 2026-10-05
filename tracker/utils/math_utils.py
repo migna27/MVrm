@@ -138,17 +138,57 @@ def smooth_tracks(tracks_raw, window=5, polyorder=2):
 def calculate_hand_angles(landmarks, is_right=False):
     import math
     import numpy as np
+    from scipy.spatial.transform import Rotation
+    
     angles = {}
     prefix = 'right' if is_right else 'left'
-    def pt(idx): return np.array([landmarks[idx].x, landmarks[idx].y])
+    
+    # 3D points: MediaPipe X is right, Y is down.
+    # Mapeamos a X=right, Y=up, Z=depth
+    def pt(idx): return np.array([landmarks[idx].x, -landmarks[idx].y, landmarks[idx].z])
+    
     wrist = pt(0)
     index_mcp = pt(5)
-    hand_dir = index_mcp - wrist
-    hand_dir = hand_dir / (np.linalg.norm(hand_dir) + 1e-6)
-    roll = math.atan2(hand_dir[1], hand_dir[0])
-    if not is_right: roll -= math.pi
-    angles[f"{prefix}Hand"] = [0, 0, roll * 0.5] 
+    middle_mcp = pt(9)
+    pinky_mcp = pt(17)
     
+    # X_obs: direction of the hand (wrist to middle_mcp)
+    x_obs = middle_mcp - wrist
+    x_len = np.linalg.norm(x_obs)
+    
+    if x_len > 1e-5:
+        x_obs = x_obs / x_len
+        
+        # Z_obs: across the knuckles (pinky to index)
+        # Left Hand: pinky to index points +Z in VRM T-Pose.
+        # Right Hand: pinky to index points +Z in VRM T-Pose.
+        z_obs = index_mcp - pinky_mcp
+        z_len = np.linalg.norm(z_obs)
+        if z_len > 1e-5:
+            z_obs = z_obs / z_len
+            
+            # Y_obs = Z x X (normal to the back of the hand)
+            y_obs = np.cross(z_obs, x_obs)
+            y_obs /= (np.linalg.norm(y_obs) + 1e-6)
+            
+            # Re-orthogonalize Z = X x Y
+            z_obs = np.cross(x_obs, y_obs)
+            
+            if not is_right:
+                R_rest = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).T
+            else:
+                R_rest = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, 1]]).T
+                
+            R_obs = np.column_stack((x_obs, y_obs, z_obs))
+            
+            try:
+                R_rot = R_obs @ np.linalg.inv(R_rest)
+                r = Rotation.from_matrix(R_rot)
+                angles[f"{prefix}Hand"] = r.as_euler('xyz').tolist()
+            except:
+                pass
+
+    # Finger curling based on 3D distance
     fingers = [
         ('Thumb', 1, 2, 3, 4), ('Index', 5, 6, 7, 8),
         ('Middle', 9, 10, 11, 12), ('Ring', 13, 14, 15, 16),
@@ -158,11 +198,16 @@ def calculate_hand_angles(landmarks, is_right=False):
         d_mcp = np.linalg.norm(pt(mcp) - wrist)
         d_tip = np.linalg.norm(pt(tip) - wrist)
         ratio = d_tip / (d_mcp + 1e-6)
-        curl = np.clip((2.0 - ratio) * 1.5, 0.0, 1.5)
+        
+        # When fingers are straight, tip is ~2x further than mcp from wrist.
+        # When curled, tip can be closer than mcp.
+        curl = np.clip((2.2 - ratio) * 1.5, 0.0, 1.8)
         if fname == 'Thumb': curl *= 0.5 
-        angles[f"{prefix}{fname}Proximal"] = [0, 0, curl]
-        angles[f"{prefix}{fname}Intermediate"] = [0, 0, curl]
-        angles[f"{prefix}{fname}Distal"] = [0, 0, curl]
+        
+        angles[f"{prefix}{fname}Proximal"] = [0, 0, float(curl)]
+        angles[f"{prefix}{fname}Intermediate"] = [0, 0, float(curl)]
+        angles[f"{prefix}{fname}Distal"] = [0, 0, float(curl)]
+        
     return angles
 
 def calculate_face_blendshapes(face_landmarks):
