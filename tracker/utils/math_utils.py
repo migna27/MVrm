@@ -294,7 +294,6 @@ _JERARQUIA = {
 
 
 def _mundo_padre(mundo, hueso):
-    """Rotación mundo del padre más cercano que tengamos (si falta, sube por la jerarquía)."""
     padre = _JERARQUIA.get(hueso)
     while padre is not None:
         if padre in mundo:
@@ -306,11 +305,16 @@ def _mundo_padre(mundo, hueso):
 def rotaciones_locales(mundo):
     locales = {}
     for hueso in _JERARQUIA:
-        if hueso not in mundo:
-            continue
-        r_local = _mundo_padre(mundo, hueso).inv() * mundo[hueso]
+        # Si el hueso no esta en el mundo (por baja visibilidad), asumimos que esta en su posicion de reposo global
+        r_mundo = mundo.get(hueso, Rotation.identity())
+        
+        # Para que el hueso se quede en reposo GLOBAL (ej. brazos colgando hacia abajo en T-pose, o piernas rectas),
+        # su rotacion local debe compensar la rotacion del padre.
+        r_local = _mundo_padre(mundo, hueso).inv() * r_mundo
+        
         if hueso.endswith('Hand'):
             r_local = limitar_rotacion(r_local, LIMITE_MUNECA)
+            
         locales[hueso] = r_local
     return locales
 
