@@ -2,7 +2,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 import time
-from utils.math_utils import calculate_full_body_angles, apply_anti_clipping
+from utils.math_utils import (resolver_frame, FiltroRotacion, a_euler_threejs,
+                              a_cuaternion_vmc, calculate_face_blendshapes)
 
 def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=None):
     mp_holistic = mp.solutions.holistic
@@ -31,7 +32,7 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
     frame_interval = max(1, int(video_fps / fps_target))
     
     tracks_raw = {}
-    live_angle_history = {}
+    filtros = {}
     frame_idx = 0
     
     print("[INFO] Iniciando captura. Presiona ESC en la ventana de preview para salir.")
@@ -78,77 +79,38 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                 if results.right_hand_landmarks:
                     mp_drawing.draw_landmarks(image_bgr, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
-                angles = {}
-                positions = {}
-                
-                # Postura (Cuerpo)
-                if results.pose_world_landmarks:
-                    from utils.math_utils import calculate_full_body_angles, apply_anti_clipping
-                    # Pasamos directamente el array de landmarks para evaluar visibilidad
-                    b_angles, b_positions, b_world = calculate_full_body_angles(results.pose_world_landmarks.landmark)
-                    angles.update(b_angles)
-                    positions.update(b_positions)
-                    
-                    # El anti clipping lo aplicamos solo a las manos si están visibles
-                    lms = results.pose_world_landmarks.landmark
-                    lw = np.array([lms[15].x, -lms[15].y, lms[15].z])
-                    rw = np.array([lms[16].x, -lms[16].y, lms[16].z])
-                    ls = np.array([lms[11].x, -lms[11].y, lms[11].z])
-                    rs = np.array([lms[12].x, -lms[12].y, lms[12].z])
-                    angles = apply_anti_clipping(angles, lw, rw, ls, rs)
-                    
-                # Manos
-                from utils.math_utils import calculate_hand_angles
-                if results.left_hand_landmarks:
-                    l_hand_angles = calculate_hand_angles(results.left_hand_landmarks.landmark, b_world.get('leftLowerArm'), is_right=False)
-                    angles.update(l_hand_angles)
-                if results.right_hand_landmarks:
-                    r_hand_angles = calculate_hand_angles(results.right_hand_landmarks.landmark, b_world.get('rightLowerArm'), is_right=True)
-                    angles.update(r_hand_angles)
-                
+                # Solver cinemático (cuerpo + manos) -> rotaciones LOCALES (scipy Rotation)
+                alto_img, ancho_img = image.shape[0], image.shape[1]
+                locales = resolver_frame(results.pose_world_landmarks, results.left_hand_landmarks,
+                                         results.right_hand_landmarks, ancho_img, alto_img)
+
+                # Filtro temporal por hueso (rechaza inversiones palma/dorso de 1-3 frames)
+                rotaciones = {}
+                for bone, r in locales.items():
+                    if bone not in filtros:
+                        filtros[bone] = FiltroRotacion()
+                    rotaciones[bone] = filtros[bone].actualizar(r)
+
                 # Cara (Expresiones)
                 blendshapes = {}
                 if results.face_landmarks:
-                    from utils.math_utils import calculate_face_blendshapes
                     blendshapes = calculate_face_blendshapes(results.face_landmarks)
-                
-                if angles or positions or blendshapes:
+
+                if rotaciones or blendshapes:
                     if live and osc_client:
-                        from scipy.spatial.transform import Rotation
-                        
-                        # Filtro Exponencial (EMA) para suavizar y verificar errores
-                        ALPHA = 0.4
-                        
-                        for bone, rot in angles.items():
-                            if bone not in live_angle_history:
-                                live_angle_history[bone] = np.array(rot)
-                            else:
-                                live_angle_history[bone] = ALPHA * np.array(rot) + (1.0 - ALPHA) * live_angle_history[bone]
-                                
+                        for bone, r in rotaciones.items():
                             try:
-                                r = Rotation.from_euler('xyz', live_angle_history[bone].tolist())
-                                qx, qy, qz, qw = r.as_quat()
-                                osc_client.send_message("/VMC/Ext/Bone/Pos", [bone, 0.0, 0.0, 0.0, float(qx), float(qy), float(qz), float(qw)])
-                            except Exception as e:
+                                qx, qy, qz, qw = a_cuaternion_vmc(r)
+                                osc_client.send_message("/VMC/Ext/Bone/Pos", [bone, 0.0, 0.0, 0.0, qx, qy, qz, qw])
+                            except Exception:
                                 pass
-                        
-                        if 'hips' in positions:
-                            hx, hy, hz = positions['hips']
-                            osc_client.send_message("/VMC/Ext/Root/Pos", ["root", float(hx), float(hy), float(hz), 0.0, 0.0, 0.0, 1.0])
-                            
-                        # Enviar Blendshapes
                         for blend_name, val in blendshapes.items():
                             osc_client.send_message("/VMC/Ext/Blend/Val", [blend_name, float(val)])
-                            
                         osc_client.send_message("/VMC/Ext/Blend/Apply", [])
-                        
                     else:
-                        for bone, rot in angles.items():
+                        for bone, r in rotaciones.items():
                             if bone not in tracks_raw: tracks_raw[bone] = []
-                            tracks_raw[bone].append({"Id": f"tr_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": rot, "Tipo": "HuesoRotacion"})
-                        for bone, pos in positions.items():
-                            if bone not in tracks_raw: tracks_raw[bone] = []
-                            tracks_raw[bone].append({"Id": f"tr_pos_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": pos, "Tipo": "HuesoPosicion"})
+                            tracks_raw[bone].append({"Id": f"tr_{frame_idx}_{bone}", "Tiempo": time_sec, "Valor": a_euler_threejs(r), "Tipo": "HuesoRotacion"})
                         for blend_name, val in blendshapes.items():
                             if blend_name not in tracks_raw: tracks_raw[blend_name] = []
                             tracks_raw[blend_name].append({"Id": f"tr_exp_{frame_idx}_{blend_name}", "Tiempo": time_sec, "Valor": [val], "Tipo": "Expresion"})
