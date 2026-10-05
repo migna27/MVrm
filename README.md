@@ -1,10 +1,10 @@
-# Animador VRM (v a-1.1.0)
+# Animador VRM (v a-1.1.1)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
 
-## Características (v a-1.1.0)
+## Características (v a-1.1.1)
 
-- **Tracking 3D de Manos y Muñecas:** Nueva proyección matemática 3D de los nudillos y base de la mano para interpretar con precisión milimétrica la rotación de la palma y el enrollamiento de los dedos, resolviendo el problema de las manos invertidas.
+- **Cinemática Inversa y Directa (Local Rotations):** El motor matemático ahora calcula la rotación relativa de cada hueso respecto a su hueso padre (inv(parent) * child), solucionando deformaciones de muñecas y codos rotos al interpretar correctamente la jerarquía ósea del VRM.
 - **Motor de Tracking Optimizado:** Eliminación de modelos redundantes o inestables (RTMPose, MDM), dejando exclusivamente a MediaPipe Holistic local por su velocidad y robustez.
 - **Corrección de Tracking con IA (Filtro EMA y Visibilidad):** Algoritmos avanzados de estabilización de postura y descarte inteligente de extremidades ocultas. ¡Lo que no se ve no se trackea, evitando roturas articulares!
 - **IA Holistic (Cuerpo y Manos):** Integración de MediaPipe Holistic desde Python. El modelo ahora es capaz de imitar no solo la postura del torso y brazos, sino la rotación de las muñecas y abrir/cerrar los puños.

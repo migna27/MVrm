@@ -3,31 +3,22 @@ import numpy as np
 from scipy.signal import savgol_filter
 from scipy.spatial.transform import Rotation
 
-def align_vectors(v_rest, v_obs):
-    """Calcula los Euler angles necesarios para rotar v_rest hacia v_obs en espacio 3D."""
+def align_vectors_matrix(v_rest, v_obs):
     v_rest = v_rest / (np.linalg.norm(v_rest) + 1e-6)
     v_obs = v_obs / (np.linalg.norm(v_obs) + 1e-6)
     
     axis = np.cross(v_rest, v_obs)
     axis_len = np.linalg.norm(axis)
     if axis_len < 1e-5:
-        return [0.0, 0.0, 0.0]
+        return Rotation.identity()
     
     axis = axis / axis_len
     angle = math.acos(np.clip(np.dot(v_rest, v_obs), -1.0, 1.0))
-    
-    r = Rotation.from_rotvec(axis * angle)
-    return r.as_euler('xyz').tolist()
+    return Rotation.from_rotvec(axis * angle)
 
 def calculate_full_body_angles(landmarks):
-    """
-    Convierte landmarks a Euler Angles resolviendo la cinemática directa (Forward Kinematics).
-    Aplica verificación de visibilidad (lo que no se ve no se trackea).
-    """
     angles = {}
     positions = {}
-    
-    # Umbral de visibilidad
     VISIBILITY_THRESHOLD = 0.5
     
     def pt(idx):
@@ -51,72 +42,83 @@ def calculate_full_body_angles(landmarks):
     hips_mid = (lh + rh) / 2.0
     shoulders_mid = (ls + rs) / 2.0
     
-    # 2. Vectores Observados (Dirección real en el video)
-    spine_obs = shoulders_mid - hips_mid
+    world_rotations = {}
     
-    # 3. Calcular Rotaciones alineando el vector de reposo con el observado
     # Espalda
     if ls_v > 0.3 and rs_v > 0.3 and lh_v > 0.3 and rh_v > 0.3:
-        angles['spine'] = align_vectors(np.array([0, 1, 0]), spine_obs)
+        world_rotations['spine'] = align_vectors_matrix(np.array([0, 1, 0]), shoulders_mid - hips_mid)
+    else:
+        world_rotations['spine'] = Rotation.identity()
         
-    # Cabeza (3 Grados de Libertad: Pitch, Yaw, Roll) usando Orejas y Nariz
+    # Cabeza
     lear, lear_v = pt(7)
     rear, rear_v = pt(8)
-    
     if lear_v > 0.3 and rear_v > 0.3 and nose_v > 0.3:
-        # El espacio base es: +X = Derecha de la pantalla (Izquierda del personaje), +Y = Arriba, +Z = Lejos de la cámara
-        # El eje +X observado es desde la oreja derecha hacia la oreja izquierda
         x_axis = lear - rear 
         x_axis /= (np.linalg.norm(x_axis) + 1e-6)
-        
-        # El eje +Z observado (lejos de la cámara) es desde la nariz hacia el centro de las orejas
         head_mid = (lear + rear) / 2.0
         z_axis = head_mid - nose
         z_axis /= (np.linalg.norm(z_axis) + 1e-6)
-        
-        # El eje +Y observado (arriba) es el producto cruz Z x X
         y_axis = np.cross(z_axis, x_axis)
         y_axis /= (np.linalg.norm(y_axis) + 1e-6)
-        
-        # Recalcular X para asegurar ortogonalidad perfecta
         x_axis = np.cross(y_axis, z_axis)
         
         try:
             rot_mat = np.column_stack((x_axis, y_axis, z_axis))
-            r = Rotation.from_matrix(rot_mat)
-            angles['head'] = r.as_euler('xyz').tolist()
-        except Exception:
-            pass
+            world_rotations['head'] = Rotation.from_matrix(rot_mat)
+        except:
+            world_rotations['head'] = world_rotations['spine']
     
-    # Brazo Izquierdo
+    # Brazos
     if ls_v > VISIBILITY_THRESHOLD and le_v > VISIBILITY_THRESHOLD:
-        angles['leftUpperArm'] = align_vectors(np.array([1, 0, 0]), le - ls)
+        world_rotations['leftUpperArm'] = align_vectors_matrix(np.array([1, 0, 0]), le - ls)
         if lw_v > VISIBILITY_THRESHOLD:
-            angles['leftLowerArm'] = align_vectors(np.array([1, 0, 0]), lw - le)
+            world_rotations['leftLowerArm'] = align_vectors_matrix(np.array([1, 0, 0]), lw - le)
             
-    # Brazo Derecho
     if rs_v > VISIBILITY_THRESHOLD and re_v > VISIBILITY_THRESHOLD:
-        angles['rightUpperArm'] = align_vectors(np.array([-1, 0, 0]), re - rs)
+        world_rotations['rightUpperArm'] = align_vectors_matrix(np.array([-1, 0, 0]), re - rs)
         if rw_v > VISIBILITY_THRESHOLD:
-            angles['rightLowerArm'] = align_vectors(np.array([-1, 0, 0]), rw - re)
+            world_rotations['rightLowerArm'] = align_vectors_matrix(np.array([-1, 0, 0]), rw - re)
             
-    # Pierna Izquierda
+    # Piernas
     if lh_v > VISIBILITY_THRESHOLD and lk_v > VISIBILITY_THRESHOLD:
-        angles['leftUpperLeg'] = align_vectors(np.array([0, -1, 0]), lk - lh)
+        world_rotations['leftUpperLeg'] = align_vectors_matrix(np.array([0, -1, 0]), lk - lh)
         if la_v > VISIBILITY_THRESHOLD:
-            angles['leftLowerLeg'] = align_vectors(np.array([0, -1, 0]), la - lk)
+            world_rotations['leftLowerLeg'] = align_vectors_matrix(np.array([0, -1, 0]), la - lk)
             
-    # Pierna Derecha
     if rh_v > VISIBILITY_THRESHOLD and rk_v > VISIBILITY_THRESHOLD:
-        angles['rightUpperLeg'] = align_vectors(np.array([0, -1, 0]), rk - rh)
+        world_rotations['rightUpperLeg'] = align_vectors_matrix(np.array([0, -1, 0]), rk - rh)
         if ra_v > VISIBILITY_THRESHOLD:
-            angles['rightLowerLeg'] = align_vectors(np.array([0, -1, 0]), ra - rk)
+            world_rotations['rightLowerLeg'] = align_vectors_matrix(np.array([0, -1, 0]), ra - rk)
             
-    return angles, positions
+    # Convertir World Rotations a Local Rotations
+    hierarchy = {
+        'head': 'spine',
+        'leftUpperArm': 'spine',
+        'leftLowerArm': 'leftUpperArm',
+        'rightUpperArm': 'spine',
+        'rightLowerArm': 'rightUpperArm',
+        'leftUpperLeg': None, # Hips is parent, assuming identity for now
+        'leftLowerLeg': 'leftUpperLeg',
+        'rightUpperLeg': None,
+        'rightLowerLeg': 'rightUpperLeg'
+    }
+    
+    angles['spine'] = world_rotations.get('spine', Rotation.identity()).as_euler('xyz').tolist()
+    
+    for bone, parent in hierarchy.items():
+        if bone in world_rotations:
+            r_world = world_rotations[bone]
+            r_parent_world = world_rotations.get(parent, Rotation.identity()) if parent else Rotation.identity()
+            # R_world = R_parent_world * R_local  =>  R_local = R_parent_world^-1 * R_world
+            r_local = r_parent_world.inv() * r_world
+            angles[bone] = r_local.as_euler('xyz').tolist()
+            
+    return angles, positions, world_rotations
 
 def apply_anti_clipping(angles, l_wrist, r_wrist, l_shoulder, r_shoulder):
-    # Ya no es tan necesario con el cálculo vectorial exacto, pero lo mantenemos por seguridad.
     return angles
+
 
 def smooth_tracks(tracks_raw, window=5, polyorder=2):
     tracks_smoothed = {}
@@ -135,7 +137,7 @@ def smooth_tracks(tracks_raw, window=5, polyorder=2):
         tracks_smoothed[bone] = keys
     return tracks_smoothed
 
-def calculate_hand_angles(landmarks, is_right=False):
+def calculate_hand_angles(landmarks, parent_world_rot=None, is_right=False):
     import math
     import numpy as np
     from scipy.spatial.transform import Rotation
@@ -152,26 +154,17 @@ def calculate_hand_angles(landmarks, is_right=False):
     middle_mcp = pt(9)
     pinky_mcp = pt(17)
     
-    # X_obs: direction of the hand (wrist to middle_mcp)
     x_obs = middle_mcp - wrist
     x_len = np.linalg.norm(x_obs)
     
     if x_len > 1e-5:
         x_obs = x_obs / x_len
-        
-        # Z_obs: across the knuckles (pinky to index)
-        # Left Hand: pinky to index points +Z in VRM T-Pose.
-        # Right Hand: pinky to index points +Z in VRM T-Pose.
         z_obs = index_mcp - pinky_mcp
         z_len = np.linalg.norm(z_obs)
         if z_len > 1e-5:
             z_obs = z_obs / z_len
-            
-            # Y_obs = Z x X (normal to the back of the hand)
             y_obs = np.cross(z_obs, x_obs)
             y_obs /= (np.linalg.norm(y_obs) + 1e-6)
-            
-            # Re-orthogonalize Z = X x Y
             z_obs = np.cross(x_obs, y_obs)
             
             if not is_right:
@@ -182,13 +175,19 @@ def calculate_hand_angles(landmarks, is_right=False):
             R_obs = np.column_stack((x_obs, y_obs, z_obs))
             
             try:
-                R_rot = R_obs @ np.linalg.inv(R_rest)
-                r = Rotation.from_matrix(R_rot)
-                angles[f"{prefix}Hand"] = r.as_euler('xyz').tolist()
+                R_world = R_obs @ np.linalg.inv(R_rest)
+                r_world = Rotation.from_matrix(R_world)
+                
+                # Apply local rotation math
+                if parent_world_rot is not None:
+                    r_local = parent_world_rot.inv() * r_world
+                else:
+                    r_local = r_world
+                    
+                angles[f"{prefix}Hand"] = r_local.as_euler('xyz').tolist()
             except:
                 pass
 
-    # Finger curling based on 3D distance
     fingers = [
         ('Thumb', 1, 2, 3, 4), ('Index', 5, 6, 7, 8),
         ('Middle', 9, 10, 11, 12), ('Ring', 13, 14, 15, 16),
@@ -198,12 +197,8 @@ def calculate_hand_angles(landmarks, is_right=False):
         d_mcp = np.linalg.norm(pt(mcp) - wrist)
         d_tip = np.linalg.norm(pt(tip) - wrist)
         ratio = d_tip / (d_mcp + 1e-6)
-        
-        # When fingers are straight, tip is ~2x further than mcp from wrist.
-        # When curled, tip can be closer than mcp.
         curl = np.clip((2.2 - ratio) * 1.5, 0.0, 1.8)
         if fname == 'Thumb': curl *= 0.5 
-        
         angles[f"{prefix}{fname}Proximal"] = [0, 0, float(curl)]
         angles[f"{prefix}{fname}Intermediate"] = [0, 0, float(curl)]
         angles[f"{prefix}{fname}Distal"] = [0, 0, float(curl)]

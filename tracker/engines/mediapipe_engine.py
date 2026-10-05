@@ -85,7 +85,7 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                 if results.pose_world_landmarks:
                     from utils.math_utils import calculate_full_body_angles, apply_anti_clipping
                     # Pasamos directamente el array de landmarks para evaluar visibilidad
-                    b_angles, b_positions = calculate_full_body_angles(results.pose_world_landmarks.landmark)
+                    b_angles, b_positions, b_world = calculate_full_body_angles(results.pose_world_landmarks.landmark)
                     angles.update(b_angles)
                     positions.update(b_positions)
                     
@@ -100,10 +100,10 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                 # Manos
                 from utils.math_utils import calculate_hand_angles
                 if results.left_hand_landmarks:
-                    l_hand_angles = calculate_hand_angles(results.left_hand_landmarks.landmark, is_right=False)
+                    l_hand_angles = calculate_hand_angles(results.left_hand_landmarks.landmark, b_world.get('leftLowerArm'), is_right=False)
                     angles.update(l_hand_angles)
                 if results.right_hand_landmarks:
-                    r_hand_angles = calculate_hand_angles(results.right_hand_landmarks.landmark, is_right=True)
+                    r_hand_angles = calculate_hand_angles(results.right_hand_landmarks.landmark, b_world.get('rightLowerArm'), is_right=True)
                     angles.update(r_hand_angles)
                 
                 # Cara (Expresiones)
