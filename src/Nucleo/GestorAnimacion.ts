@@ -1,39 +1,118 @@
 // ============================================================================
-// GestorAnimacion.ts — Etapa 2: Sistema de animación por fotogramas clave
-// Administra las pistas, la evaluación de la animación en un tiempo dado,
-// el horneado de clips importados a claves editables y la reproducción.
+// GestorAnimacion.ts — Sistema de animación por fotogramas clave optimizado
+// Administra las pistas, caché ordenado, búsqueda binaria O(log K), estrategias
+// de interpolación, simplificación RDP, navegación y horneado de clips.
 // ============================================================================
 
 import * as THREE from 'three';
 import {
   ClaveAnimacion, PistaAnimacion, TipoObjetivoPista, GrupoPista,
-  PRIORIDAD_GRUPOS, DatosProyecto
+  TipoInterpolacion, RangoBucle, PRIORIDAD_GRUPOS, DatosProyecto
 } from '../Tipos';
-import { GenerarId, InterpolacionSuave, Limitar } from '../Utilidades';
+import { BusEventos } from '../Arquitectura/BusEventos';
+import { EvaluarInterpolacion } from '../Arquitectura/EstrategiasInterpolacion';
+import { GenerarId, Limitar } from '../Utilidades';
 import { GestorModelos, NOMBRES_HUESOS_LEGIBLES } from './GestorModelos';
 import { GestorEscena } from './GestorEscena';
 
-const EPSILON_CLAVE = 0.004; // Diferencia mínima de tiempo para fusionar claves
+const EPSILON_CLAVE = 0.004; // Diferencia mínima de tiempo para horneado denso
+export const TOLERANCIA_SOBRESCRITURA = 0.015; // Ventana (15 ms) para detectar clave existente en el cabezal
+
+const PARES_ESPEJO: [string, string][] = [
+  ['leftShoulder', 'rightShoulder'],
+  ['leftUpperArm', 'rightUpperArm'],
+  ['leftLowerArm', 'rightLowerArm'],
+  ['leftHand', 'rightHand'],
+  ['leftUpperLeg', 'rightUpperLeg'],
+  ['leftLowerLeg', 'rightLowerLeg'],
+  ['leftFoot', 'rightFoot'],
+  ['leftToes', 'rightToes']
+];
+
+const HUESOS_CENTRALES = ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head'];
 
 export class GestorAnimacion {
-  public Pistas: PistaAnimacion[] = [];
+  private _Pistas: PistaAnimacion[] = [];
+  private _PistasOrdenadasCache: PistaAnimacion[] = [];
+  private _PistasSucias = true;
+
+  // Objetos temporales reutilizables para evitar asignaciones por cuadro (0 GC)
+  private readonly _QuatA = new THREE.Quaternion();
+  private readonly _QuatB = new THREE.Quaternion();
+  private readonly _EulerA = new THREE.Euler();
+  private readonly _EulerB = new THREE.Euler();
+  private readonly _Vec3 = new THREE.Vector3();
+  private readonly _HuesosRestablecer = new Set<string>();
+  private readonly _ExpresionesRestablecer = new Set<string>();
+  private readonly _HuesosConPosicion = new Set<string>();
+  private readonly _UltimosValoresEfectos = new Map<string, number>();
+
   public Duracion = 10;          // Duración total de la línea de tiempo (s)
   public TiempoActual = 0;       // Cabezal de reproducción (s)
   public Reproduciendo = false;
   public EnBucle = true;
 
-  /** Se dispara cuando cambian las pistas (agregar, mover o eliminar claves). */
+  /** Callback heredado cuando cambian las pistas (se mantiene por compatibilidad). */
   public AlCambiarPistas: () => void = () => {};
 
-  constructor(private Modelos: GestorModelos, private Escena: GestorEscena) {}
+  constructor(
+    private Modelos: GestorModelos,
+    private Escena: GestorEscena,
+    private Bus?: BusEventos
+  ) {}
+
+  /** Lista de pistas del proyecto; asignar un arreglo invalida la caché ordenada. */
+  public get Pistas(): PistaAnimacion[] {
+    return this._Pistas;
+  }
+
+  public set Pistas(nuevas: PistaAnimacion[]) {
+    this._Pistas = Array.isArray(nuevas) ? nuevas : [];
+    this._PistasSucias = true;
+  }
+
+  /** Marca la caché como sucia y notifica tanto al callback como al BusEventos. */
+  public NotificarCambioPistas(motivo?: string): void {
+    this._PistasSucias = true;
+    this.AlCambiarPistas();
+    this.Bus?.Emitir('pistas:cambiadas', { motivo });
+  }
+
+  /** Devuelve las pistas ordenadas por prioridad usando la caché si sigue vigente. */
+  public ObtenerPistasOrdenadas(): readonly PistaAnimacion[] {
+    if (this._PistasSucias || this._PistasOrdenadasCache.length !== this._Pistas.length) {
+      this._PistasOrdenadasCache = [...this._Pistas].sort(
+        (A, B) => PRIORIDAD_GRUPOS.indexOf(A.Grupo) - PRIORIDAD_GRUPOS.indexOf(B.Grupo)
+      );
+      this._PistasSucias = false;
+    }
+    return this._PistasOrdenadasCache;
+  }
 
   // --------------------------------------------------------------------------
   // Administración de pistas y claves
   // --------------------------------------------------------------------------
 
+  /** Nombre legible prefijado por grupo. */
+  public NombreGrupo(Grupo: GrupoPista): string {
+    switch (Grupo) {
+      case 'SeguimientoCuerpo': return 'Cuerpo';
+      case 'SeguimientoRostro': return 'Rostro';
+      case 'Preajuste': return 'Preajuste';
+      case 'Importado': return 'Importado';
+      case 'GrabacionVMC': return 'VMC';
+      default: return 'Manual';
+    }
+  }
+
+  /** Busca una pista sin crearla. */
+  public BuscarPista(Tipo: TipoObjetivoPista, Objetivo: string, Grupo: GrupoPista): PistaAnimacion | undefined {
+    return this._Pistas.find((P) => P.Tipo === Tipo && P.Objetivo === Objetivo && P.Grupo === Grupo);
+  }
+
   /** Busca (o crea) la pista para un objetivo y grupo dados. */
   public ObtenerOCrearPista(Tipo: TipoObjetivoPista, Objetivo: string, Grupo: GrupoPista): PistaAnimacion {
-    let Pista = this.Pistas.find((P) => P.Tipo === Tipo && P.Objetivo === Objetivo && P.Grupo === Grupo);
+    let Pista = this.BuscarPista(Tipo, Objetivo, Grupo);
     if (!Pista) {
       const NombreLegible = NOMBRES_HUESOS_LEGIBLES[Objetivo] ?? Objetivo;
       Pista = {
@@ -41,22 +120,97 @@ export class GestorAnimacion {
         Nombre: `${this.NombreGrupo(Grupo)} · ${NombreLegible}`,
         Tipo, Objetivo, Grupo, Claves: []
       };
-      this.Pistas.push(Pista);
+      this._Pistas.push(Pista);
+      this._PistasSucias = true;
     }
     return Pista;
   }
 
-  private NombreGrupo(Grupo: GrupoPista): string {
-    switch (Grupo) {
-      case 'SeguimientoCuerpo': return 'Cuerpo';
-      case 'SeguimientoRostro': return 'Rostro';
-      case 'Preajuste': return 'Preajuste';
-      case 'Importado': return 'Importado';
-      default: return 'Manual';
+  /** Busca la clave más cercana al tiempo dado dentro de la tolerancia indicada. */
+  public BuscarClaveEnTiempo(
+    Pista: PistaAnimacion,
+    Tiempo: number,
+    Tolerancia = TOLERANCIA_SOBRESCRITURA
+  ): ClaveAnimacion | undefined {
+    let Mejor: ClaveAnimacion | undefined;
+    let MejorDist = Tolerancia;
+    for (const C of Pista.Claves) {
+      const Dist = Math.abs(C.Tiempo - Tiempo);
+      if (Dist <= MejorDist) {
+        MejorDist = Dist;
+        Mejor = C;
+      }
     }
+    return Mejor;
   }
 
-  /** Inserta o reemplaza una clave en la pista indicada. */
+  /** Lista todas las pistas y claves que coinciden en un instante dado. */
+  public ObtenerClavesEnTiempo(
+    Tiempo: number,
+    Grupo?: GrupoPista,
+    Tolerancia = TOLERANCIA_SOBRESCRITURA
+  ): Array<{ Pista: PistaAnimacion; Clave: ClaveAnimacion }> {
+    const Resultado: Array<{ Pista: PistaAnimacion; Clave: ClaveAnimacion }> = [];
+    for (const Pista of this._Pistas) {
+      if (Grupo && Pista.Grupo !== Grupo) continue;
+      const Clave = this.BuscarClaveEnTiempo(Pista, Tiempo, Tolerancia);
+      if (Clave) Resultado.push({ Pista, Clave });
+    }
+    return Resultado;
+  }
+
+  /** Indica si existe al menos una clave en el tiempo especificado. */
+  public ExisteClaveEnTiempo(
+    Tiempo: number,
+    Grupo?: GrupoPista,
+    Tolerancia = TOLERANCIA_SOBRESCRITURA
+  ): boolean {
+    for (const Pista of this._Pistas) {
+      if (Grupo && Pista.Grupo !== Grupo) continue;
+      if (this.BuscarClaveEnTiempo(Pista, Tiempo, Tolerancia)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Inserta o sobrescribe una clave en la pista indicada, informando si hubo
+   * sobrescritura y conservando copia de la clave anterior para deshacer.
+   */
+  public GuardarClave(
+    Pista: PistaAnimacion,
+    Tiempo: number,
+    Valor: number[],
+    Interpolacion: TipoInterpolacion = 'Suave',
+    Tolerancia = TOLERANCIA_SOBRESCRITURA
+  ): { Clave: ClaveAnimacion; Sobrescrita: boolean; Anterior: ClaveAnimacion | null } {
+    const T = Limitar(Tiempo, 0, this.Duracion);
+    const Existente = this.BuscarClaveEnTiempo(Pista, T, Tolerancia);
+    if (Existente) {
+      const Anterior: ClaveAnimacion = {
+        Id: Existente.Id,
+        Tiempo: Existente.Tiempo,
+        Valor: [...Existente.Valor],
+        Interpolacion: Existente.Interpolacion
+      };
+      Existente.Valor = [...Valor];
+      if (Interpolacion) Existente.Interpolacion = Interpolacion;
+      this.NotificarCambioPistas('clave-sobrescrita');
+      return { Clave: Existente, Sobrescrita: true, Anterior };
+    }
+
+    const Clave: ClaveAnimacion = {
+      Id: GenerarId(),
+      Tiempo: T,
+      Valor: [...Valor],
+      Interpolacion
+    };
+    Pista.Claves.push(Clave);
+    Pista.Claves.sort((A, B) => A.Tiempo - B.Tiempo);
+    this.NotificarCambioPistas('clave-insertada');
+    return { Clave, Sobrescrita: false, Anterior: null };
+  }
+
+  /** Inserta o reemplaza una clave en la pista indicada (compatibilidad directa). */
   public AgregarClave(Pista: PistaAnimacion, Tiempo: number, Valor: number[]): ClaveAnimacion {
     const T = Limitar(Tiempo, 0, this.Duracion);
     let Clave = Pista.Claves.find((C) => Math.abs(C.Tiempo - T) < EPSILON_CLAVE);
@@ -67,167 +221,432 @@ export class GestorAnimacion {
       Pista.Claves.push(Clave);
       Pista.Claves.sort((A, B) => A.Tiempo - B.Tiempo);
     }
-    this.AlCambiarPistas();
+    this.NotificarCambioPistas('clave-agregada');
     return Clave;
+  }
+
+  /** Actualiza tiempo, valor o interpolación de una clave puntual. */
+  public EstablecerPropiedadesClave(
+    PistaId: string,
+    ClaveId: string,
+    Cambios: { Tiempo?: number; Valor?: number[]; Interpolacion?: TipoInterpolacion }
+  ): boolean {
+    const Pista = this._Pistas.find((P) => P.Id === PistaId);
+    if (!Pista || Pista.Bloqueada) return false;
+    const Clave = Pista.Claves.find((C) => C.Id === ClaveId);
+    if (!Clave) return false;
+
+    if (Cambios.Tiempo !== undefined) {
+      Clave.Tiempo = Limitar(Cambios.Tiempo, 0, this.Duracion);
+      Pista.Claves.sort((A, B) => A.Tiempo - B.Tiempo);
+    }
+    if (Cambios.Valor !== undefined) {
+      Clave.Valor = [...Cambios.Valor];
+    }
+    if (Cambios.Interpolacion !== undefined) {
+      Clave.Interpolacion = Cambios.Interpolacion;
+    }
+    this.NotificarCambioPistas('clave-editada');
+    return true;
   }
 
   /** Mueve una clave a un nuevo tiempo manteniendo el orden de la pista. */
   public MoverClave(Pista: PistaAnimacion, ClaveId: string, NuevoTiempo: number): void {
+    if (Pista.Bloqueada) return;
     const Clave = Pista.Claves.find((C) => C.Id === ClaveId);
     if (!Clave) return;
     Clave.Tiempo = Limitar(NuevoTiempo, 0, this.Duracion);
     Pista.Claves.sort((A, B) => A.Tiempo - B.Tiempo);
-    this.AlCambiarPistas();
+    this.NotificarCambioPistas('clave-movida');
   }
 
   /** Elimina una clave; si la pista queda vacía también se elimina. */
   public EliminarClave(PistaId: string, ClaveId: string): void {
-    const Pista = this.Pistas.find((P) => P.Id === PistaId);
-    if (!Pista) return;
+    const Pista = this._Pistas.find((P) => P.Id === PistaId);
+    if (!Pista || Pista.Bloqueada) return;
     Pista.Claves = Pista.Claves.filter((C) => C.Id !== ClaveId);
     if (Pista.Claves.length === 0) {
-      this.Pistas = this.Pistas.filter((P) => P.Id !== PistaId);
+      this._Pistas = this._Pistas.filter((P) => P.Id !== PistaId);
     }
-    this.AlCambiarPistas();
+    this.NotificarCambioPistas('clave-eliminada');
   }
 
   /** Elimina una pista completa por su id. */
   public EliminarPista(PistaId: string): void {
-    this.Pistas = this.Pistas.filter((P) => P.Id !== PistaId);
-    this.AlCambiarPistas();
+    this._Pistas = this._Pistas.filter((P) => P.Id !== PistaId);
+    this.NotificarCambioPistas('pista-eliminada');
   }
 
   /** Elimina todas las pistas de un grupo (p. ej. seguimiento anterior). */
   public EliminarPistasPorGrupo(Grupo: GrupoPista): void {
-    this.Pistas = this.Pistas.filter((P) => P.Grupo !== Grupo);
-    this.AlCambiarPistas();
+    this._Pistas = this._Pistas.filter((P) => P.Grupo !== Grupo);
+    this.NotificarCambioPistas('grupo-eliminado');
   }
 
   /** Agrega un conjunto de pistas generadas (preajustes, importación, tracking). */
   public AgregarPistas(Nuevas: PistaAnimacion[]): void {
     for (const Nueva of Nuevas) {
-      const Existente = this.Pistas.find(
+      const Existente = this._Pistas.find(
         (P) => P.Tipo === Nueva.Tipo && P.Objetivo === Nueva.Objetivo && P.Grupo === Nueva.Grupo
       );
       if (Existente) {
-        for (const Clave of Nueva.Claves) this.AgregarClave(Existente, Clave.Tiempo, Clave.Valor);
+        for (const Clave of Nueva.Claves) {
+          const Exist = Existente.Claves.find((C) => Math.abs(C.Tiempo - Clave.Tiempo) < EPSILON_CLAVE);
+          if (Exist) {
+            Exist.Valor = [...Clave.Valor];
+            if (Clave.Interpolacion) Exist.Interpolacion = Clave.Interpolacion;
+          } else {
+            Existente.Claves.push({
+              Id: Clave.Id || GenerarId(),
+              Tiempo: Limitar(Clave.Tiempo, 0, this.Duracion),
+              Valor: [...Clave.Valor],
+              Interpolacion: Clave.Interpolacion
+            });
+          }
+        }
+        Existente.Claves.sort((A, B) => A.Tiempo - B.Tiempo);
       } else {
-        this.Pistas.push(Nueva);
+        this._Pistas.push({
+          ...Nueva,
+          Claves: [...Nueva.Claves].sort((A, B) => A.Tiempo - B.Tiempo)
+        });
       }
     }
-    this.AlCambiarPistas();
+    this.NotificarCambioPistas('pistas-agregadas');
   }
 
   /** Inserta claves de la pose actual para todos los huesos y expresiones. */
-  public InsertarPoseCompleta(Tiempo: number): void {
-    if (!this.Modelos.Vrm) return;
+  public InsertarPoseCompleta(Tiempo: number, Interpolacion: TipoInterpolacion = 'Suave'): { Insertadas: number; Sobrescritas: number } {
+    if (!this.Modelos.Vrm) return { Insertadas: 0, Sobrescritas: 0 };
+    let Insertadas = 0;
+    let Sobrescritas = 0;
+
     for (const Nombre of this.Modelos.ObtenerHuesosDisponibles()) {
       const Euler = this.Modelos.ObtenerRotacionHueso(Nombre);
       const Pista = this.ObtenerOCrearPista('HuesoRotacion', Nombre, 'Manual');
-      this.AgregarClave(Pista, Tiempo, [Euler.x, Euler.y, Euler.z]);
+      const Res = this.GuardarClave(Pista, Tiempo, [Euler.x, Euler.y, Euler.z], Interpolacion);
+      if (Res.Sobrescrita) Sobrescritas++; else Insertadas++;
     }
     const PosCadera = this.Modelos.ObtenerPosicionHueso('hips');
     const PistaPos = this.ObtenerOCrearPista('HuesoPosicion', 'hips', 'Manual');
-    this.AgregarClave(PistaPos, Tiempo, [PosCadera.x, PosCadera.y, PosCadera.z]);
+    const ResPos = this.GuardarClave(PistaPos, Tiempo, [PosCadera.x, PosCadera.y, PosCadera.z], Interpolacion);
+    if (ResPos.Sobrescrita) Sobrescritas++; else Insertadas++;
+
     for (const Expresion of this.Modelos.ObtenerExpresiones()) {
       const Peso = this.Modelos.ObtenerValorExpresion(Expresion);
-      if (Peso > 0.001) {
-        const Pista = this.ObtenerOCrearPista('Expresion', Expresion, 'Manual');
-        this.AgregarClave(Pista, Tiempo, [Peso]);
+      const PistaExistente = this.BuscarPista('Expresion', Expresion, 'Manual');
+      if (Peso > 0.001 || (PistaExistente && this.BuscarClaveEnTiempo(PistaExistente, Tiempo))) {
+        const Pista = PistaExistente ?? this.ObtenerOCrearPista('Expresion', Expresion, 'Manual');
+        const ResExp = this.GuardarClave(Pista, Tiempo, [Peso], Interpolacion);
+        if (ResExp.Sobrescrita) Sobrescritas++; else Insertadas++;
+      }
+    }
+    return { Insertadas, Sobrescritas };
+  }
+
+  /** Lee el valor actual en vivo del visor/escena para cualquier objetivo de pista. */
+  public ObtenerValorActualObjetivo(Tipo: TipoObjetivoPista, Objetivo: string): number[] | null {
+    switch (Tipo) {
+      case 'HuesoRotacion': {
+        if (!this.Modelos.Vrm || !this.Modelos.ObtenerNodoHueso(Objetivo)) return null;
+        const E = this.Modelos.ObtenerRotacionHueso(Objetivo);
+        return [E.x, E.y, E.z];
+      }
+      case 'HuesoPosicion': {
+        if (!this.Modelos.Vrm || !this.Modelos.ObtenerNodoHueso(Objetivo)) return null;
+        const P = this.Modelos.ObtenerPosicionHueso(Objetivo);
+        return [P.x, P.y, P.z];
+      }
+      case 'Expresion': {
+        if (!this.Modelos.Vrm) return null;
+        return [this.Modelos.ObtenerValorExpresion(Objetivo)];
+      }
+      case 'CamaraPosicion': {
+        const P = this.Escena.Camara.position;
+        return [P.x, P.y, P.z];
+      }
+      case 'CamaraObjetivo': {
+        const T = this.Escena.Controles.target;
+        return [T.x, T.y, T.z];
+      }
+      case 'CamaraFOV':
+        return [this.Escena.Camara.fov];
+      case 'Efecto':
+      case 'Luz': {
+        if (Objetivo === 'Exposicion') return [this.Escena.Renderer.toneMappingExposure];
+        if (Objetivo === 'LuzDireccional') return [this.Escena.LuzDireccional.intensity];
+        if (Objetivo === 'LuzAmbiental') return [this.Escena.LuzAmbiental.intensity];
+        if (Objetivo === 'BloomFuerza') return [this.Escena.BloomFuerza];
+        if (this._UltimosValoresEfectos.has(Objetivo)) {
+          return [this._UltimosValoresEfectos.get(Objetivo)!];
+        }
+        const Pista = this._Pistas.find((P) => P.Tipo === Tipo && P.Objetivo === Objetivo && P.Claves.length > 0);
+        if (Pista) {
+          const Val = this.InterpolarPista(Pista, this.TiempoActual);
+          if (Val) return [...Val];
+        }
+        const Defecto: Record<string, number> = {
+          BloomRadio: 0.6,
+          BloomUmbral: 0.85,
+          RGBShift: 0.0025,
+          RuidoIntensidad: 0.35,
+          VignetaOscuridad: 1.2
+        };
+        return [Defecto[Objetivo] ?? 0];
       }
     }
   }
 
+  /** Busca el tiempo de la clave inmediatamente anterior al tiempo dado. */
+  public BuscarTiempoClaveAnterior(Tiempo: number, Grupo?: GrupoPista): number | null {
+    const Umbral = Tiempo - 0.005;
+    let Mejor: number | null = null;
+    for (const Pista of this._Pistas) {
+      if (Grupo && Pista.Grupo !== Grupo) continue;
+      for (const C of Pista.Claves) {
+        if (C.Tiempo < Umbral && (Mejor === null || C.Tiempo > Mejor)) {
+          Mejor = C.Tiempo;
+        }
+      }
+    }
+    return Mejor;
+  }
+
+  /** Busca el tiempo de la clave inmediatamente posterior al tiempo dado. */
+  public BuscarTiempoClaveSiguiente(Tiempo: number, Grupo?: GrupoPista): number | null {
+    const Umbral = Tiempo + 0.005;
+    let Mejor: number | null = null;
+    for (const Pista of this._Pistas) {
+      if (Grupo && Pista.Grupo !== Grupo) continue;
+      for (const C of Pista.Claves) {
+        if (C.Tiempo > Umbral && (Mejor === null || C.Tiempo < Mejor)) {
+          Mejor = C.Tiempo;
+        }
+      }
+    }
+    return Mejor;
+  }
+
+  /**
+   * Simplifica una secuencia ordenada de claves aplicando Ramer-Douglas-Peucker (RDP)
+   * sobre el error temporal-espacial para reducir claves redundantes sin deformar la curva.
+   */
+  public SimplificarClaves(Claves: ClaveAnimacion[], Tolerancia = 0.015): ClaveAnimacion[] {
+    if (Claves.length <= 2) return Claves.map((C) => ({ ...C, Valor: [...C.Valor] }));
+    const Ordenadas = [...Claves].sort((A, B) => A.Tiempo - B.Tiempo);
+    const Conservar = new Uint8Array(Ordenadas.length);
+    Conservar[0] = 1;
+    Conservar[Ordenadas.length - 1] = 1;
+
+    const EvaluarRango = (Inicio: number, Fin: number) => {
+      if (Fin - Inicio <= 1) return;
+      const A = Ordenadas[Inicio];
+      const B = Ordenadas[Fin];
+      const Span = B.Tiempo - A.Tiempo;
+      let MaxError = -1;
+      let MaxIndice = -1;
+
+      for (let I = Inicio + 1; I < Fin; I++) {
+        const K = Ordenadas[I];
+        if (K.Interpolacion === 'Escalon' || A.Interpolacion === 'Escalon') {
+          Conservar[I] = 1;
+          continue;
+        }
+        const U = Span > 1e-6 ? (K.Tiempo - A.Tiempo) / Span : 0;
+        let SumaSq = 0;
+        const Dim = Math.min(A.Valor.length, B.Valor.length, K.Valor.length);
+        for (let D = 0; D < Dim; D++) {
+          const Est = A.Valor[D] + (B.Valor[D] - A.Valor[D]) * U;
+          const Diff = K.Valor[D] - Est;
+          SumaSq += Diff * Diff;
+        }
+        const Error = Math.sqrt(SumaSq);
+        if (Error > MaxError) {
+          MaxError = Error;
+          MaxIndice = I;
+        }
+      }
+
+      if (MaxIndice >= 0 && MaxError > Tolerancia) {
+        Conservar[MaxIndice] = 1;
+        EvaluarRango(Inicio, MaxIndice);
+        EvaluarRango(MaxIndice, Fin);
+      }
+    };
+
+    EvaluarRango(0, Ordenadas.length - 1);
+    const Salida: ClaveAnimacion[] = [];
+    for (let I = 0; I < Ordenadas.length; I++) {
+      if (Conservar[I]) {
+        Salida.push({
+          ...Ordenadas[I],
+          Valor: [...Ordenadas[I].Valor]
+        });
+      }
+    }
+    return Salida;
+  }
+
+  /** Espeja horizontalmente (Izquierda ↔ Derecha) la pose actual del modelo VRM. */
+  public EspejarPoseActual(): boolean {
+    if (!this.Modelos.Vrm) return false;
+    const QIzq = new THREE.Quaternion();
+    const QDer = new THREE.Quaternion();
+
+    for (const [HuesoIzq, HuesoDer] of PARES_ESPEJO) {
+      const NodoIzq = this.Modelos.ObtenerNodoHueso(HuesoIzq);
+      const NodoDer = this.Modelos.ObtenerNodoHueso(HuesoDer);
+      if (NodoIzq && NodoDer) {
+        QIzq.copy(NodoIzq.quaternion);
+        QDer.copy(NodoDer.quaternion);
+        // Reflexión simétrica respecto al plano YZ: conserva rotación X y niega Y, Z
+        NodoIzq.quaternion.set(QDer.x, -QDer.y, -QDer.z, QDer.w);
+        NodoDer.quaternion.set(QIzq.x, -QIzq.y, -QIzq.z, QIzq.w);
+      }
+    }
+
+    for (const HuesoCentro of HUESOS_CENTRALES) {
+      const Nodo = this.Modelos.ObtenerNodoHueso(HuesoCentro);
+      if (Nodo) {
+        Nodo.quaternion.set(
+          Nodo.quaternion.x,
+          -Nodo.quaternion.y,
+          -Nodo.quaternion.z,
+          Nodo.quaternion.w
+        );
+      }
+    }
+
+    const Cadera = this.Modelos.ObtenerNodoHueso('hips');
+    if (Cadera) Cadera.position.x = -Cadera.position.x;
+    return true;
+  }
+
   // --------------------------------------------------------------------------
-  // Evaluación de la animación
+  // Evaluación de la animación (búsqueda binaria O(log K) + cero asignaciones)
   // --------------------------------------------------------------------------
+
+  private BuscarIndiceSegmento(Claves: ClaveAnimacion[], Tiempo: number): number {
+    let Bajo = 0;
+    let Alto = Claves.length - 2;
+    while (Bajo <= Alto) {
+      const Medio = (Bajo + Alto) >> 1;
+      if (Claves[Medio + 1].Tiempo <= Tiempo) {
+        Bajo = Medio + 1;
+      } else if (Claves[Medio].Tiempo > Tiempo) {
+        Alto = Medio - 1;
+      } else {
+        return Medio;
+      }
+    }
+    return Limitar(Bajo, 0, Claves.length - 2);
+  }
 
   /** Interpola el valor de una pista en un tiempo dado (devuelve null si vacía). */
   private InterpolarPista(Pista: PistaAnimacion, Tiempo: number): number[] | null {
     const Claves = Pista.Claves;
-    if (Claves.length === 0) return null;
-    if (Tiempo <= Claves[0].Tiempo) return Claves[0].Valor;
-    if (Tiempo >= Claves[Claves.length - 1].Tiempo) return Claves[Claves.length - 1].Valor;
+    const N = Claves.length;
+    if (N === 0) return null;
+    if (N === 1 || Tiempo <= Claves[0].Tiempo) return Claves[0].Valor;
+    if (Tiempo >= Claves[N - 1].Tiempo) return Claves[N - 1].Valor;
 
-    let Indice = 0;
-    while (Indice < Claves.length - 1 && Claves[Indice + 1].Tiempo < Tiempo) Indice++;
+    const Indice = this.BuscarIndiceSegmento(Claves, Tiempo);
     const A = Claves[Indice];
     const B = Claves[Indice + 1];
-    const Alfa = InterpolacionSuave((Tiempo - A.Tiempo) / Math.max(1e-6, B.Tiempo - A.Tiempo));
-    return A.Valor.map((V, I) => V + (B.Valor[I] - V) * Alfa);
+    const Alfa = EvaluarInterpolacion(
+      (Tiempo - A.Tiempo) / Math.max(1e-6, B.Tiempo - A.Tiempo),
+      A.Interpolacion
+    );
+    const Resultado = new Array<number>(A.Valor.length);
+    for (let I = 0; I < A.Valor.length; I++) {
+      Resultado[I] = A.Valor[I] + (B.Valor[I] - A.Valor[I]) * Alfa;
+    }
+    return Resultado;
   }
 
   /**
-   * Evalúa todas las pistas en un tiempo y aplica el resultado al modelo.
-   * Los objetivos con pista se restablecen primero a la pose de reposo para
-   * que la evaluación sea determinista al desplazarse por la línea de tiempo.
+   * Evalúa todas las pistas activas (no silenciadas) en un tiempo dado y aplica
+   * el resultado al modelo, luces, efectos o cámara.
    */
   public EvaluarEn(Tiempo: number): void {
-    if (!this.Modelos.Vrm) return;
+    const PistasOrdenadas = this.ObtenerPistasOrdenadas();
+    if (PistasOrdenadas.length === 0) return;
 
-    // Ordenar por prioridad de grupo: los de mayor prioridad se aplican al final
-    const PistasOrdenadas = [...this.Pistas].sort(
-      (A, B) => PRIORIDAD_GRUPOS.indexOf(A.Grupo) - PRIORIDAD_GRUPOS.indexOf(B.Grupo)
-    );
+    this._HuesosRestablecer.clear();
+    this._ExpresionesRestablecer.clear();
+    this._HuesosConPosicion.clear();
 
-    // Restablecer los objetivos animados a su pose de reposo
-    const HuesosRestablecer = new Set<string>();
-    const ExpresionesRestablecer = new Set<string>();
     for (const Pista of PistasOrdenadas) {
-      if (Pista.Tipo === 'Expresion') ExpresionesRestablecer.add(Pista.Objetivo);
-      else HuesosRestablecer.add(Pista.Objetivo);
-    }
-    for (const Nombre of HuesosRestablecer) {
-      const Reposo = this.Modelos.PoseReposo.get(Nombre);
-      const Nodo = this.Modelos.ObtenerNodoHueso(Nombre);
-      if (Reposo && Nodo) {
-        Nodo.quaternion.copy(Reposo.Rotacion);
-        if (PistasOrdenadas.some((P) => P.Tipo === 'HuesoPosicion' && P.Objetivo === Nombre)) {
-          Nodo.position.copy(Reposo.Posicion);
-        }
+      if (Pista.Silenciada || Pista.Claves.length === 0) continue;
+      if (Pista.Tipo === 'Expresion') {
+        this._ExpresionesRestablecer.add(Pista.Objetivo);
+      } else if (Pista.Tipo === 'HuesoRotacion' || Pista.Tipo === 'HuesoPosicion') {
+        this._HuesosRestablecer.add(Pista.Objetivo);
+        if (Pista.Tipo === 'HuesoPosicion') this._HuesosConPosicion.add(Pista.Objetivo);
       }
     }
-    for (const Nombre of ExpresionesRestablecer) this.Modelos.EstablecerExpresion(Nombre, 0);
 
-    // Aplicar los valores interpolados
-    const CuaternionA = new THREE.Quaternion();
-    const CuaternionB = new THREE.Quaternion();
-    const EulerA = new THREE.Euler();
-    const EulerB = new THREE.Euler();
+    if (this.Modelos.Vrm) {
+      for (const Nombre of this._HuesosRestablecer) {
+        const Reposo = this.Modelos.PoseReposo.get(Nombre);
+        const Nodo = this.Modelos.ObtenerNodoHueso(Nombre);
+        if (Reposo && Nodo) {
+          Nodo.quaternion.copy(Reposo.Rotacion);
+          if (this._HuesosConPosicion.has(Nombre)) {
+            Nodo.position.copy(Reposo.Posicion);
+          }
+        }
+      }
+      for (const Nombre of this._ExpresionesRestablecer) {
+        this.Modelos.EstablecerExpresion(Nombre, 0);
+      }
+    }
 
     for (const Pista of PistasOrdenadas) {
-      // Para rotaciones se interpola en cuaterniones para evitar saltos
-      if (Pista.Tipo === 'HuesoRotacion' && Pista.Claves.length >= 2) {
+      if (Pista.Silenciada || Pista.Claves.length === 0) continue;
+
+      if (Pista.Tipo === 'HuesoRotacion') {
+        if (!this.Modelos.Vrm) continue;
+        const Nodo = this.Modelos.ObtenerNodoHueso(Pista.Objetivo);
+        if (!Nodo) continue;
         const Claves = Pista.Claves;
-        let Valor: number[] | null = null;
-        if (Tiempo <= Claves[0].Tiempo) Valor = Claves[0].Valor;
-        else if (Tiempo >= Claves[Claves.length - 1].Tiempo) Valor = Claves[Claves.length - 1].Valor;
-        else {
-          let Indice = 0;
-          while (Indice < Claves.length - 1 && Claves[Indice + 1].Tiempo < Tiempo) Indice++;
+        const N = Claves.length;
+
+        if (N === 1 || Tiempo <= Claves[0].Tiempo) {
+          const V = Claves[0].Valor;
+          this._EulerA.set(V[0], V[1], V[2]);
+          Nodo.quaternion.setFromEuler(this._EulerA);
+        } else if (Tiempo >= Claves[N - 1].Tiempo) {
+          const V = Claves[N - 1].Valor;
+          this._EulerA.set(V[0], V[1], V[2]);
+          Nodo.quaternion.setFromEuler(this._EulerA);
+        } else {
+          const Indice = this.BuscarIndiceSegmento(Claves, Tiempo);
           const A = Claves[Indice];
           const B = Claves[Indice + 1];
-          const Alfa = InterpolacionSuave((Tiempo - A.Tiempo) / Math.max(1e-6, B.Tiempo - A.Tiempo));
-          EulerA.set(A.Valor[0], A.Valor[1], A.Valor[2]);
-          EulerB.set(B.Valor[0], B.Valor[1], B.Valor[2]);
-          CuaternionA.setFromEuler(EulerA);
-          CuaternionB.setFromEuler(EulerB);
-          CuaternionA.slerp(CuaternionB, Alfa);
-          this.Modelos.ObtenerNodoHueso(Pista.Objetivo)?.quaternion.copy(CuaternionA);
-          continue;
-        }
-        if (Valor) {
-          EulerA.set(Valor[0], Valor[1], Valor[2]);
-          this.Modelos.EstablecerRotacionHueso(Pista.Objetivo, EulerA);
+          const Alfa = EvaluarInterpolacion(
+            (Tiempo - A.Tiempo) / Math.max(1e-6, B.Tiempo - A.Tiempo),
+            A.Interpolacion
+          );
+          this._EulerA.set(A.Valor[0], A.Valor[1], A.Valor[2]);
+          this._EulerB.set(B.Valor[0], B.Valor[1], B.Valor[2]);
+          this._QuatA.setFromEuler(this._EulerA);
+          this._QuatB.setFromEuler(this._EulerB);
+          this._QuatA.slerp(this._QuatB, Alfa);
+          Nodo.quaternion.copy(this._QuatA);
         }
         continue;
       }
 
       const Valor = this.InterpolarPista(Pista, Tiempo);
       if (!Valor) continue;
+
       if (Pista.Tipo === 'HuesoPosicion') {
-        this.Modelos.EstablecerPosicionHueso(Pista.Objetivo, new THREE.Vector3(Valor[0], Valor[1], Valor[2]));
+        if (!this.Modelos.Vrm) continue;
+        this._Vec3.set(Valor[0], Valor[1], Valor[2]);
+        this.Modelos.EstablecerPosicionHueso(Pista.Objetivo, this._Vec3);
       } else if (Pista.Tipo === 'Expresion') {
+        if (!this.Modelos.Vrm) continue;
         this.Modelos.EstablecerExpresion(Pista.Objetivo, Limitar(Valor[0], 0, 1));
       } else if (Pista.Tipo === 'Efecto' || Pista.Tipo === 'Luz') {
         this.AplicarEfectoLuz(Pista.Objetivo, Valor[0]);
@@ -244,13 +663,14 @@ export class GestorAnimacion {
 
   private AplicarEfectoLuz(Objetivo: string, Valor: number): void {
     if (!this.Escena) return;
+    this._UltimosValoresEfectos.set(Objetivo, Valor);
     switch (Objetivo) {
       case 'Exposicion': this.Escena.EstablecerExposicion(Valor); break;
       case 'LuzDireccional': this.Escena.EstablecerLuzDireccional(Valor); break;
       case 'LuzAmbiental': this.Escena.EstablecerLuzAmbiental(Valor); break;
-      case 'BloomFuerza': 
+      case 'BloomFuerza':
         this.Escena.BloomFuerza = Valor;
-        this.Escena.EstablecerBloom(this.Escena.BloomActivo, Valor); 
+        this.Escena.EstablecerBloom(this.Escena.BloomActivo, Valor);
         break;
       case 'BloomRadio': this.Escena.EstablecerBloom(this.Escena.BloomActivo, undefined, Valor); break;
       case 'BloomUmbral': this.Escena.EstablecerBloom(this.Escena.BloomActivo, undefined, undefined, Valor); break;
@@ -264,50 +684,79 @@ export class GestorAnimacion {
   // Reproducción
   // --------------------------------------------------------------------------
 
-  public Reproducir(): void { this.Reproduciendo = true; }
-  public Pausar(): void { this.Reproduciendo = false; }
+  public Reproducir(): void {
+    this.Reproduciendo = true;
+    this.Bus?.Emitir('reproduccion:cambiada', { reproduciendo: true });
+  }
+
+  public Pausar(): void {
+    this.Reproduciendo = false;
+    this.Bus?.Emitir('reproduccion:cambiada', { reproduciendo: false });
+  }
 
   public Detener(): void {
     this.Reproduciendo = false;
     this.TiempoActual = 0;
+    this.Bus?.Emitir('reproduccion:cambiada', { reproduciendo: false });
+    this.Bus?.Emitir('tiempo:cambiado', { tiempo: 0, fuente: 'usuario' });
   }
 
-  /** Avanza el cabezal según el delta del reloj; respeta el bucle. */
-  public Avanzar(Delta: number): void {
-    this.TiempoActual += Delta;
-    if (this.TiempoActual > this.Duracion) {
-      this.TiempoActual = this.EnBucle ? this.TiempoActual % this.Duracion : this.Duracion;
-      if (!this.EnBucle) this.Reproduciendo = false;
+  /** Avanza el cabezal según delta, velocidad y rango de bucle opcional. */
+  public Avanzar(Delta: number, Velocidad = 1, RangoBucle?: RangoBucle): void {
+    const InicioBucle = RangoBucle?.Activo ? Limitar(RangoBucle.Inicio, 0, this.Duracion) : 0;
+    const FinBucle = RangoBucle?.Activo
+      ? Limitar(Math.max(InicioBucle + 0.05, RangoBucle.Fin), 0, this.Duracion)
+      : this.Duracion;
+
+    this.TiempoActual += Delta * Velocidad;
+    if (this.TiempoActual > FinBucle) {
+      if (this.EnBucle) {
+        const Longitud = Math.max(1e-4, FinBucle - InicioBucle);
+        this.TiempoActual = InicioBucle + ((this.TiempoActual - InicioBucle) % Longitud);
+      } else {
+        this.TiempoActual = FinBucle;
+        this.Reproduciendo = false;
+        this.Bus?.Emitir('reproduccion:cambiada', { reproduciendo: false });
+      }
+    } else if (RangoBucle?.Activo && this.TiempoActual < InicioBucle) {
+      this.TiempoActual = InicioBucle;
     }
   }
 
-  public EstablecerTiempo(Tiempo: number): void {
+  public EstablecerTiempo(Tiempo: number, Fuente: 'reproduccion' | 'usuario' | 'comando' = 'usuario'): void {
     this.TiempoActual = Limitar(Tiempo, 0, this.Duracion);
+    this.Bus?.Emitir('tiempo:cambiado', { tiempo: this.TiempoActual, fuente: Fuente });
   }
 
   // --------------------------------------------------------------------------
-  // Horneado de clips importados (VRMA) a claves editables
+  // Horneado de clips importados (VRMA / BVH / GLTF) a claves editables
   // --------------------------------------------------------------------------
 
   /**
    * Muestrea un AnimationClip a una tasa fija y genera pistas de claves
    * editables para los huesos y expresiones que realmente cambian.
    */
-  public HornearClip(Clip: THREE.AnimationClip, Fps: number, Grupo: GrupoPista): PistaAnimacion[] {
+  public HornearClip(
+    Clip: THREE.AnimationClip,
+    Fps: number,
+    Grupo: GrupoPista,
+    ActualizarDuracion = true
+  ): PistaAnimacion[] {
     if (!this.Modelos.Vrm) return [];
     const Raiz = this.Modelos.Vrm.scene;
     const Mezclador = new THREE.AnimationMixer(Raiz);
     const Accion = Mezclador.clipAction(Clip);
     Accion.play();
 
-    const Muestras = Math.max(2, Math.round(Clip.duration * Fps) + 1);
+    const DuracionClip = Math.max(0.05, Clip.duration);
+    const Muestras = Math.max(2, Math.round(DuracionClip * Fps) + 1);
     const SerieHuesos = new Map<string, number[][]>();
     const SeriePosicion = new Map<string, number[][]>();
     const SerieExpresiones = new Map<string, number[]>();
     const Tiempos: number[] = [];
 
     for (let I = 0; I < Muestras; I++) {
-      const T = Math.min(Clip.duration, I / Fps);
+      const T = Math.min(DuracionClip, I / Fps);
       Tiempos.push(T);
       Mezclador.setTime(T);
 
@@ -331,7 +780,6 @@ export class GestorAnimacion {
     Mezclador.uncacheRoot(Raiz);
     this.Modelos.RestablecerPose();
 
-    // Solo se generan pistas para las series con variación real
     const Pistas: PistaAnimacion[] = [];
     const HayVariacion = (Serie: number[][], Umbral: number) =>
       Serie.some((V) => V.some((X, J) => Math.abs(X - Serie[0][J]) > Umbral));
@@ -342,7 +790,7 @@ export class GestorAnimacion {
         Id: GenerarId(),
         Nombre: `${this.NombreGrupo(Grupo)} · ${NOMBRES_HUESOS_LEGIBLES[Nombre] ?? Nombre}`,
         Tipo: 'HuesoRotacion', Objetivo: Nombre, Grupo,
-        Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: Serie[I] }))
+        Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: Serie[I], Interpolacion: 'Suave' }))
       });
     }
     for (const [Nombre, Serie] of SeriePosicion) {
@@ -351,7 +799,7 @@ export class GestorAnimacion {
         Id: GenerarId(),
         Nombre: `${this.NombreGrupo(Grupo)} · Posición cadera`,
         Tipo: 'HuesoPosicion', Objetivo: Nombre, Grupo,
-        Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: Serie[I] }))
+        Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: Serie[I], Interpolacion: 'Suave' }))
       });
     }
     for (const [Nombre, Serie] of SerieExpresiones) {
@@ -360,12 +808,13 @@ export class GestorAnimacion {
         Id: GenerarId(),
         Nombre: `${this.NombreGrupo(Grupo)} · ${Nombre}`,
         Tipo: 'Expresion', Objetivo: Nombre, Grupo,
-        Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: [Serie[I]] }))
+        Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: [Serie[I]], Interpolacion: 'Suave' }))
       });
     }
 
-    // La duración de la línea de tiempo cubre al clip importado
-    if (Clip.duration > this.Duracion) this.Duracion = Math.ceil(Clip.duration);
+    if (ActualizarDuracion && Clip.duration > this.Duracion) {
+      this.Duracion = Math.ceil(Clip.duration);
+    }
     return Pistas;
   }
 
@@ -374,26 +823,27 @@ export class GestorAnimacion {
   // --------------------------------------------------------------------------
 
   public ExportarJSON(): string {
-    return JSON.stringify({ Version: 1, Duracion: this.Duracion, Pistas: this.Pistas }, null, 2);
+    return JSON.stringify({ Version: 1, Duracion: this.Duracion, Pistas: this._Pistas }, null, 2);
   }
 
   public ImportarJSON(Texto: string): void {
     const Datos = JSON.parse(Texto);
     if (!Array.isArray(Datos.Pistas)) throw new Error('Formato de animación no válido.');
-    this.Pistas = Datos.Pistas as PistaAnimacion[];
+    this._Pistas = Datos.Pistas as PistaAnimacion[];
     if (typeof Datos.Duracion === 'number') this.Duracion = Datos.Duracion;
-    this.AlCambiarPistas();
+    this.NotificarCambioPistas('json-importado');
   }
 
   public Limpiar(): void {
-    this.Pistas = [];
+    this._Pistas = [];
     this.TiempoActual = 0;
     this.Duracion = 10;
     this.Reproduciendo = false;
-    this.AlCambiarPistas();
+    this._UltimosValoresEfectos.clear();
+    this.NotificarCambioPistas('limpiar');
   }
 
   public ObtenerDatosProyecto(): Partial<DatosProyecto> {
-    return { Version: 1, Duracion: this.Duracion, Pistas: this.Pistas };
+    return { Version: 1, Duracion: this.Duracion, Pistas: this._Pistas };
   }
 }

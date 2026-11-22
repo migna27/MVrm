@@ -15,6 +15,7 @@ import type { GestorVMC } from './Nucleo/GestorVMC';
 import type { BusEventos } from './Arquitectura/BusEventos';
 import type { HistorialComandos } from './Arquitectura/HistorialComandos';
 import type { EstadoEstudio } from './Arquitectura/EstadoEstudio';
+import type { ServicioImportacion } from './Arquitectura/ImportadoresAnimacion';
 
 export interface ContextoAplicacion {
   Bus: BusEventos;
@@ -28,7 +29,7 @@ export interface ContextoAplicacion {
   Tracking: GestorTracking;
   Exportador: GestorExportacion;
   VMC: GestorVMC;
-  Importador?: any;
+  Importador: ServicioImportacion;
 
   /** Muestra un mensaje en la barra de estado del visor. */
   NotificarEstado(Mensaje: string, Tipo?: 'info' | 'exito' | 'aviso' | 'error', PermitirDeshacer?: boolean): void;
