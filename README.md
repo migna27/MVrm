@@ -1,8 +1,19 @@
-# Animador VRM (v1.2.0)
+# Animador VRM (v1.2.1)
 
 Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con arquitectura desacoplada por eventos y un flujo de trabajo profesional de estudio oscuro (paneles con pestañas, visor 3D con barra flotante y línea de tiempo optimizada) para crear animaciones fluidas, gestionar *keyframes* con historial reversible y exportar videos hasta resolución 4K.
 
-## Características (v1.2.0)
+## Novedades en v1.2.1
+
+- **Estabilidad y Fugas de Memoria:** Resolución bidireccional de expresiones VRM 0.x / 1.0 (`happy`/`joy`, `a`/`aa`, `blink`, etc.), liberación de texturas GPU, URLs `blob:`, *colliders* y esqueletos auxiliares, grabación VMC en vivo compatible con timeline en pausa e historial `Ctrl+Z`, control de *backpressure* WebCodecs y protección de bucle durante exportación WebM, validación segura en `/api/upload` y optimización del tracker MediaPipe Python.
+- **Velocidad y Arquitectura:** Eliminación de código muerto (`GestorTracking`), división de paquetes en Vite (`vendor-three` y `vendor-vrm`), caché `WeakMap` entre vista previa e importación final, y caché de textos de tiempo/cuadro en el bucle principal.
+- **Línea de Tiempo Más Cómoda:** Optimización de detección *hover*, deduplicación automática de claves colisionadas al soltar arrastre, auto-scroll durante arrastre o reproducción y barras de desplazamiento horizontales/verticales arrastrables dentro del lienzo.
+- **Usabilidad, Flujo y Comodidad:**
+  - **Autoguardado local (`ServicioAutoguardado`):** Respaldo automático con recuperación rápida de sesión (`↺ Recuperar sesión`).
+  - **Tarjeta de Bienvenida y Vistas de Cámara (`1`–`4`):** Acceso en un clic al modelo de ejemplo o `.vrm` local, más preajustes instantáneos (`Frontal`, `3/4`, `Perfil`, `Rostro`).
+  - **Atajos Inteligentes y Guía Accesible (`?`):** Diálogo modal nativo de atajos; teclas globales (`Espacio`, `K`, `Q/W/E/R`, `Ctrl+S`, `Ctrl+O`) sin quedar bloqueadas tras mover deslizadores (`range`).
+  - **Flujo de Edición Sin Pérdidas:** Preservación de foco en `InspectorClave` al tabular/editar valores, exportación directa de poses (`.json`) con refresco automático de la biblioteca local y sincronización automática de los controles de escena/efectos al cargar proyectos.
+
+## Características (v1.2.1)
 
 - **Arquitectura Modular con Patrones de Diseño:**
   - **Observer (`BusEventos`) y Store Reactivo (`EstadoEstudio`):** Desacoplan el motor 3D, la línea de tiempo y los paneles mediante eventos tipados (`pistas:cambiadas`, `tiempo:cambiado`, `seleccion:cambiada`, `historial:cambiado`).
