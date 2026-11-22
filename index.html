@@ -12,10 +12,11 @@
       <div id="IdentidadApp">
         <span id="LogoApp" aria-hidden="true">◆</span>
         <h1>Animador VRM</h1>
-        <span id="EtiquetaEtapa">Estudio 3D · v1.2</span>
+        <span id="EtiquetaEtapa">Estudio 3D · v1.2.1</span>
       </div>
 
       <div id="AccionesSuperior" role="toolbar" focusgroup="toolbar wrap" aria-label="Acciones generales del proyecto">
+        <button type="button" id="BotonRecuperarAutosave" class="BotonRecuperar Oculto" title="Recuperar la última sesión autoguardada">↺ Recuperar sesión</button>
         <div role="group" aria-label="Historial">
           <button type="button" id="BotonDeshacer" class="BotonIconoTexto" aria-disabled="true" title="Deshacer (Ctrl+Z)">↶ Deshacer</button>
           <button type="button" id="BotonRehacer" class="BotonIconoTexto" aria-disabled="true" title="Rehacer (Ctrl+Y)">↷ Rehacer</button>
@@ -23,8 +24,8 @@
         <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
         <div role="group" aria-label="Archivo de proyecto">
           <button type="button" id="BotonNuevoProyecto" title="Crear un proyecto nuevo">Nuevo</button>
-          <button type="button" id="BotonAbrirProyecto" title="Abrir proyecto (.animvrm.json)">Abrir</button>
-          <button type="button" id="BotonGuardarProyecto" title="Guardar proyecto completo">Guardar</button>
+          <button type="button" id="BotonAbrirProyecto" title="Abrir proyecto (.animvrm.json) (Ctrl+O)">Abrir</button>
+          <button type="button" id="BotonGuardarProyecto" title="Guardar proyecto completo (Ctrl+S)">Guardar</button>
         </div>
         <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
         <label class="EtiquetaCompacta" for="SelectorCalidadPrevia">Previa
@@ -35,6 +36,7 @@
           </select>
         </label>
         <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+        <button type="button" id="BotonAtajos" class="BotonIconoTexto" title="Guía de atajos de teclado (?)">? Atajos</button>
         <button type="button" id="BotonAbrirExportacion" class="BotonPrimario BotonExportarHeader">⬆ Exportar Video</button>
       </div>
     </header>
@@ -55,6 +57,17 @@
           <span id="IndicadorEstado" class="ChipHud ChipEstado">Arrastra un archivo .vrm al visor para comenzar</span>
         </div>
 
+        <section id="TarjetaBienvenida" aria-label="Primeros pasos">
+          <button type="button" id="BotonOcultarBienvenida" class="BotonCerrar CerrarBienvenida" aria-label="Ocultar tarjeta de bienvenida" title="Ocultar">✕</button>
+          <h2>Empieza a animar en 3D</h2>
+          <p class="TextoTenue">Carga un modelo .vrm desde tu equipo o prueba al instante con el avatar de ejemplo.</p>
+          <div class="AccionesBienvenida">
+            <button type="button" id="BotonBienvenidaEjemplo" class="BotonPrimario">✨ Probar modelo de ejemplo</button>
+            <button type="button" id="BotonBienvenidaCargar">Cargar .vrm…</button>
+          </div>
+          <p class="PistaBienvenida">También puedes soltar archivos <code>.vrm</code>, <code>.vrma</code>, <code>.bvh</code> o audio aquí · Pulsa <kbd>?</kbd> para ver atajos.</p>
+        </section>
+
         <!-- Barra flotante de herramientas 3D -->
         <div id="BarraVisor" role="toolbar" focusgroup="toolbar wrap" aria-label="Herramientas del visor 3D" aria-controls="Visor3D">
           <div role="group" aria-label="Manipulador">
@@ -62,6 +75,13 @@
             <button type="button" id="BotonGizmoMover" aria-pressed="false" title="Mover hueso (W)">Mover W</button>
             <button type="button" id="BotonGizmoRotar" aria-pressed="true" title="Rotar hueso (E)">Rotar E</button>
             <button type="button" id="BotonGizmoEspacio" aria-pressed="false" title="Alternar espacio Local / Mundo (R)">Local R</button>
+          </div>
+          <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+          <div role="group" aria-label="Vistas de cámara">
+            <button type="button" id="BotonCamFrontal" title="Vista frontal (1)">Frontal 1</button>
+            <button type="button" id="BotonCamTresCuartos" title="Vista tres cuartos (2)">3/4 2</button>
+            <button type="button" id="BotonCamPerfil" title="Vista perfil (3)">Perfil 3</button>
+            <button type="button" id="BotonCamRostro" title="Enfocar rostro (4)">Rostro 4</button>
           </div>
           <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
           <div role="group" aria-label="Utilidades de pose">

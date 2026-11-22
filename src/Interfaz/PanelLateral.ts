@@ -9,13 +9,14 @@ import { ContextoAplicacion } from '../Contexto';
 import { CATALOGO_PREAJUSTES } from '../Nucleo/Preajustes';
 import { NOMBRES_HUESOS_LEGIBLES } from '../Nucleo/GestorModelos';
 import { TipoParticulas } from '../Nucleo/GestorEfectos';
+import { PistaAnimacion } from '../Tipos';
 import {
   ComandoEliminarClaves, ComandoGuardarClave, ComandoImportarAnimacion, ComandoLote
 } from '../Arquitectura/ComandosAnimacion';
 import { InspectorClave } from './Componentes/InspectorClave';
 import { CrearIcono } from './Componentes/Iconos';
 import {
-  SeleccionarArchivo, AGrados, ARadianes, DescargarTexto, FormatearTiempo
+  SeleccionarArchivo, AGrados, ARadianes, DescargarTexto, FormatearTiempo, GenerarId
 } from '../Utilidades';
 
 const HUESOS_RAPIDOS: [string, string][] = [
@@ -50,6 +51,10 @@ export class PanelLateral {
   private BadgeSeleccion!: HTMLElement;
   private BotonesClaveEfecto: Array<{ Tipo: 'Efecto' | 'Luz'; Objetivo: string; Boton: HTMLButtonElement }> = [];
   private BotonesClaveExpresion: Array<{ Expresion: string; Boton: HTMLButtonElement }> = [];
+  private ChipsHuesosRapidos: Array<{ Hueso: string; Boton: HTMLButtonElement }> = [];
+  private DeslizadoresGlobales: Array<{ Entrada: HTMLInputElement; Salida: HTMLOutputElement; Formato: (V: number) => string }> = [];
+  private SincronizadoresEscena: Array<() => void> = [];
+  private ContenedorBiblioteca: HTMLElement | null = null;
   private ArchivoVideo: File | null = null;
   private Desuscripciones: (() => void)[] = [];
 
@@ -92,10 +97,17 @@ export class PanelLateral {
           this.SelectorHuesos.value = D.hueso;
           this.SincronizarDeslizadoresHueso();
         }
+        this.ActualizarChipsHuesoActivo(D.hueso);
         this.ActualizarIndicadoresClave();
       }),
-      Bus.Suscribir('modelo:cargado', () => this.RefrescarDinamico()),
-      Bus.Suscribir('proyecto:cargado', () => this.RefrescarDinamico()),
+      Bus.Suscribir('modelo:cargado', () => {
+        this.ReiniciarDeslizadoresGlobales();
+        this.RefrescarDinamico();
+      }),
+      Bus.Suscribir('proyecto:cargado', () => {
+        this.SincronizarControlesEscena();
+        this.RefrescarDinamico();
+      }),
       Bus.Suscribir('audio:cambiado', () => this.ActualizarEtiquetaAudio())
     );
   }
@@ -372,7 +384,10 @@ export class PanelLateral {
     const Fila2 = document.createElement('div');
     Fila2.className = 'FilaControles';
     Fila2.append(
-      this.Boton('Restablecer pose', () => { Ctx.Modelos.RestablecerPose(); }),
+      this.Boton('Restablecer pose', () => {
+        Ctx.Modelos.RestablecerPose();
+        this.SincronizarDeslizadoresHueso();
+      }),
       this.Boton('Espejar L↔R', () => {
         if (Ctx.Animacion.EspejarPoseActual()) {
           this.SincronizarDeslizadoresHueso();
@@ -382,7 +397,8 @@ export class PanelLateral {
       this.Boton('Fijar reposo', () => {
         Ctx.Modelos.GuardarPoseReposo();
         Ctx.NotificarEstado('Pose actual guardada como pose de reposo.', 'exito');
-      })
+      }),
+      this.Boton('💾 Guardar pose (.json)', () => { void this.GuardarPoseJson(); })
     );
     Cuerpo.appendChild(Fila2);
     this.Casilla(Cuerpo, 'Mostrar esqueleto auxiliar', false, (V) => Ctx.Modelos.AlternarAyudante(V));
@@ -390,13 +406,21 @@ export class PanelLateral {
     // Chips rápidos de selección anatómica
     const ChipsHuesos = document.createElement('div');
     ChipsHuesos.className = 'ChipsFiltroGrupo';
+    this.ChipsHuesosRapidos = [];
     for (const [Etiqueta, Hueso] of HUESOS_RAPIDOS) {
       const Chip = this.Boton(Etiqueta, () => {
+        if (!Ctx.Modelos.Vrm) {
+          Ctx.NotificarEstado('Carga primero un modelo VRM para seleccionar huesos.', 'aviso');
+          return;
+        }
         this.SeleccionarHueso(Hueso);
         Ctx.Estado.HuesoSeleccionado = Hueso;
+        this.ActualizarChipsHuesoActivo(Hueso);
         const Nodo = Ctx.Modelos.ObtenerNodoHueso(Hueso);
         if (Nodo) Ctx.Escena.ControlTransformacion.attach(Nodo);
       }, 'ChipFiltro');
+      Chip.setAttribute('aria-pressed', 'false');
+      this.ChipsHuesosRapidos.push({ Hueso, Boton: Chip });
       ChipsHuesos.appendChild(Chip);
     }
     Cuerpo.appendChild(ChipsHuesos);
@@ -404,7 +428,9 @@ export class PanelLateral {
     this.SelectorHuesos = document.createElement('select');
     this.SelectorHuesos.setAttribute('aria-label', 'Hueso seleccionado');
     this.SelectorHuesos.onchange = () => {
-      Ctx.Estado.HuesoSeleccionado = this.SelectorHuesos.value || null;
+      const Hueso = this.SelectorHuesos.value || null;
+      Ctx.Estado.HuesoSeleccionado = Hueso;
+      this.ActualizarChipsHuesoActivo(Hueso);
       this.SincronizarDeslizadoresHueso();
     };
     Cuerpo.appendChild(this.SelectorHuesos);
@@ -522,6 +548,99 @@ export class PanelLateral {
       this.SelectorHuesos.value = Nombre;
       this.SincronizarDeslizadoresHueso();
     }
+    this.ActualizarChipsHuesoActivo(Nombre);
+  }
+
+  private ActualizarChipsHuesoActivo(HuesoActivo: string | null): void {
+    for (const Item of this.ChipsHuesosRapidos) {
+      Item.Boton.setAttribute('aria-pressed', String(Item.Hueso === HuesoActivo));
+    }
+  }
+
+  private async GuardarPoseJson(): Promise<void> {
+    const Ctx = this.Contexto;
+    if (!Ctx.Modelos.Vrm) {
+      Ctx.NotificarEstado('Carga primero un modelo VRM para exportar su pose.', 'aviso');
+      return;
+    }
+
+    const Pistas: PistaAnimacion[] = [];
+    for (const Hueso of Ctx.Modelos.ObtenerHuesosDisponibles()) {
+      const Rot = Ctx.Modelos.ObtenerRotacionHueso(Hueso);
+      if (Math.abs(Rot.x) + Math.abs(Rot.y) + Math.abs(Rot.z) > 0.002) {
+        Pistas.push({
+          Id: GenerarId(),
+          Nombre: `Pose · ${NOMBRES_HUESOS_LEGIBLES[Hueso] ?? Hueso}`,
+          Tipo: 'HuesoRotacion',
+          Objetivo: Hueso,
+          Grupo: 'Manual',
+          Claves: [{
+            Id: GenerarId(),
+            Tiempo: 0,
+            Valor: [Rot.x, Rot.y, Rot.z],
+            Interpolacion: Ctx.Estado.InterpolacionPorDefecto
+          }]
+        });
+      }
+    }
+
+    const PosCadera = Ctx.Modelos.ObtenerPosicionHueso('hips');
+    if (PosCadera.lengthSq() > 0.0001) {
+      Pistas.push({
+        Id: GenerarId(),
+        Nombre: 'Pose · Posición cadera',
+        Tipo: 'HuesoPosicion',
+        Objetivo: 'hips',
+        Grupo: 'Manual',
+        Claves: [{
+          Id: GenerarId(),
+          Tiempo: 0,
+          Valor: [PosCadera.x, PosCadera.y, PosCadera.z],
+          Interpolacion: Ctx.Estado.InterpolacionPorDefecto
+        }]
+      });
+    }
+
+    for (const Exp of Ctx.Modelos.ObtenerExpresiones()) {
+      const Val = Ctx.Modelos.ObtenerValorExpresion(Exp);
+      if (Val > 0.005) {
+        Pistas.push({
+          Id: GenerarId(),
+          Nombre: `Pose · ${Exp}`,
+          Tipo: 'Expresion',
+          Objetivo: Exp,
+          Grupo: 'Manual',
+          Claves: [{
+            Id: GenerarId(),
+            Tiempo: 0,
+            Valor: [Val],
+            Interpolacion: Ctx.Estado.InterpolacionPorDefecto
+          }]
+        });
+      }
+    }
+
+    if (Pistas.length === 0) {
+      Ctx.NotificarEstado('La pose está en reposo; ajusta huesos o expresiones antes de guardar.', 'aviso');
+      return;
+    }
+
+    const Base = (Ctx.Modelos.NombreModelo || 'Pose').replace(/\.[^.]+$/, '').replace(/[^\w\-]+/g, '_');
+    const NombreArchivo = `${Base}_Pose.json`;
+    const Contenido = JSON.stringify({ Version: 1, Duracion: 0.5, Pistas }, null, 2);
+    DescargarTexto(Contenido, NombreArchivo);
+
+    try {
+      const Form = new FormData();
+      Form.append('file', new File([Contenido], NombreArchivo, { type: 'application/json' }));
+      Form.append('category', 'poses');
+      const Res = await fetch('/api/upload', { method: 'POST', body: Form });
+      if (Res.ok) this.RefrescarBibliotecaLocal();
+    } catch {
+      // Operación offline / build estático
+    }
+
+    Ctx.NotificarEstado(`Pose exportada (${Pistas.length} pistas) en "${NombreArchivo}".`, 'exito');
   }
 
   public SincronizarDeslizadoresHueso(): void {
@@ -547,6 +666,7 @@ export class PanelLateral {
     const Cuerpo = this.Seccion(Padre, 'Posición y Rotación Global', false);
     const Ctx = this.Contexto;
     this.Nota(Cuerpo, 'Mueve o rota al personaje completo dentro del escenario.');
+    this.DeslizadoresGlobales = [];
 
     const DeslizadoresPos: HTMLInputElement[] = [];
     const SincronizarPosicion = () => {
@@ -559,21 +679,32 @@ export class PanelLateral {
     };
 
     for (const Eje of ['X Lateral', 'Y Altura', 'Z Profundidad']) {
-      const { Entrada } = this.Deslizador(Cuerpo, Eje, -10, 10, 0.05, 0, SincronizarPosicion, (V) => `${V.toFixed(2)}m`);
-      DeslizadoresPos.push(Entrada);
+      const FormatoM = (V: number) => `${V.toFixed(2)}m`;
+      const Ctrl = this.Deslizador(Cuerpo, Eje, -10, 10, 0.05, 0, SincronizarPosicion, FormatoM);
+      DeslizadoresPos.push(Ctrl.Entrada);
+      this.DeslizadoresGlobales.push({ ...Ctrl, Formato: FormatoM });
     }
 
-    const { Entrada: RotY } = this.Deslizador(
+    const FormatoDeg = (V: number) => `${V.toFixed(0)}°`;
+    const CtrlRot = this.Deslizador(
       Cuerpo, 'Girar Personaje', -180, 180, 1, 0,
       (V) => { if (Ctx.Modelos.Vrm) Ctx.Modelos.Vrm.scene.rotation.y = V * Math.PI / 180; },
-      (V) => `${V.toFixed(0)}°`
+      FormatoDeg
     );
+    this.DeslizadoresGlobales.push({ ...CtrlRot, Formato: FormatoDeg });
 
     Cuerpo.appendChild(this.Boton('Restablecer al centro', () => {
       DeslizadoresPos.forEach((d) => { d.value = '0'; d.dispatchEvent(new Event('input')); });
-      RotY.value = '0';
-      RotY.dispatchEvent(new Event('input'));
+      CtrlRot.Entrada.value = '0';
+      CtrlRot.Entrada.dispatchEvent(new Event('input'));
     }));
+  }
+
+  private ReiniciarDeslizadoresGlobales(): void {
+    for (const Item of this.DeslizadoresGlobales) {
+      Item.Entrada.value = '0';
+      Item.Salida.textContent = Item.Formato(0);
+    }
   }
 
   // -------- Pestaña Rostro (Expresiones faciales) --------
@@ -745,8 +876,15 @@ export class PanelLateral {
 
     const CuerpoLib = this.Seccion(Padre, 'Biblioteca Local', false);
     const ContenedorNavegador = document.createElement('div');
+    this.ContenedorBiblioteca = ContenedorNavegador;
     CuerpoLib.appendChild(ContenedorNavegador);
     void this.ConstruirNavegadorArchivos(ContenedorNavegador);
+  }
+
+  public RefrescarBibliotecaLocal(): void {
+    if (this.ContenedorBiblioteca) {
+      void this.ConstruirNavegadorArchivos(this.ContenedorBiblioteca);
+    }
   }
 
   private async ConstruirNavegadorArchivos(Contenedor: HTMLElement): Promise<void> {
@@ -816,6 +954,10 @@ export class PanelLateral {
     EntradaColor.value = '#1b1e26';
     EntradaColor.setAttribute('aria-label', 'Color de fondo');
     EntradaColor.oninput = () => Ctx.Escena.EstablecerFondoColor(EntradaColor.value);
+    this.SincronizadoresEscena.push(() => {
+      const Fondo = Ctx.Escena.Escena.background as { getHexString?: () => string } | null;
+      if (Fondo?.getHexString) EntradaColor.value = `#${Fondo.getHexString()}`;
+    });
     Fila.append(
       EntradaColor,
       this.Boton('Imagen fondo…', async () => {
@@ -862,49 +1004,57 @@ export class PanelLateral {
 
     this.Nota(Cuerpo, 'Pulsa ◆ o arrastra cualquier deslizador hacia el timeline para animar.');
 
-    this.Deslizador(Cuerpo, 'Exposición', 0.1, 3.0, 0.1, 1.0,
-      (V) => Ctx.Escena.EstablecerExposicion(V), undefined,
+    const FormatoDec = (V: number) => V.toFixed(2);
+    const CtrlExp = this.Deslizador(Cuerpo, 'Exposición', 0.1, 3.0, 0.1, 1.0,
+      (V) => Ctx.Escena.EstablecerExposicion(V), FormatoDec,
       RegEfecto('Luz', 'Exposicion'), { Tipo: 'Luz', Objetivo: 'Exposicion' });
 
-    this.Deslizador(Cuerpo, 'Luz Direccional', 0, 5, 0.1, 2.2,
-      (V) => Ctx.Escena.EstablecerLuzDireccional(V), undefined,
+    const CtrlDir = this.Deslizador(Cuerpo, 'Luz Direccional', 0, 5, 0.1, 2.2,
+      (V) => Ctx.Escena.EstablecerLuzDireccional(V), FormatoDec,
       RegEfecto('Luz', 'LuzDireccional'), { Tipo: 'Luz', Objetivo: 'LuzDireccional' });
 
-    this.Deslizador(Cuerpo, 'Luz Ambiental', 0, 3, 0.1, 0.85,
-      (V) => Ctx.Escena.EstablecerLuzAmbiental(V), undefined,
+    const CtrlAmb = this.Deslizador(Cuerpo, 'Luz Ambiental', 0, 3, 0.1, 0.85,
+      (V) => Ctx.Escena.EstablecerLuzAmbiental(V), FormatoDec,
       RegEfecto('Luz', 'LuzAmbiental'), { Tipo: 'Luz', Objetivo: 'LuzAmbiental' });
 
-    let FuerzaB = 0.55;
-    let RadioB = 0.6;
-    let UmbralB = 0.85;
-    const CasillaBloom = this.Casilla(Cuerpo, 'Brillo (Bloom)', false, (V) => Ctx.Escena.EstablecerBloom(V, FuerzaB, RadioB, UmbralB));
-    this.Deslizador(Cuerpo, 'Fuerza Bloom', 0, 3, 0.1, FuerzaB,
-      (V) => { FuerzaB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
-      RegEfecto('Efecto', 'BloomFuerza'), { Tipo: 'Efecto', Objetivo: 'BloomFuerza' });
-    this.Deslizador(Cuerpo, 'Radio Bloom', 0, 1, 0.05, RadioB,
-      (V) => { RadioB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
-      RegEfecto('Efecto', 'BloomRadio'), { Tipo: 'Efecto', Objetivo: 'BloomRadio' });
-    this.Deslizador(Cuerpo, 'Umbral Bloom', 0, 1, 0.05, UmbralB,
-      (V) => { UmbralB = V; Ctx.Escena.EstablecerBloom(CasillaBloom.checked, FuerzaB, RadioB, UmbralB); }, undefined,
-      RegEfecto('Efecto', 'BloomUmbral'), { Tipo: 'Efecto', Objetivo: 'BloomUmbral' });
+    const CasillaBloom = this.Casilla(Cuerpo, 'Brillo (Bloom)', false, (V) => {
+      Ctx.Escena.EstablecerBloom(
+        V,
+        parseFloat(CtrlBloomFuerza.Entrada.value),
+        parseFloat(CtrlBloomRadio.Entrada.value),
+        parseFloat(CtrlBloomUmbral.Entrada.value)
+      );
+    });
+    const CtrlBloomFuerza = this.Deslizador(Cuerpo, 'Fuerza Bloom', 0, 3, 0.1, 0.55,
+      (V) => Ctx.Escena.EstablecerBloom(CasillaBloom.checked, V, parseFloat(CtrlBloomRadio.Entrada.value), parseFloat(CtrlBloomUmbral.Entrada.value)),
+      FormatoDec, RegEfecto('Efecto', 'BloomFuerza'), { Tipo: 'Efecto', Objetivo: 'BloomFuerza' });
+    const CtrlBloomRadio = this.Deslizador(Cuerpo, 'Radio Bloom', 0, 1, 0.05, 0.6,
+      (V) => Ctx.Escena.EstablecerBloom(CasillaBloom.checked, parseFloat(CtrlBloomFuerza.Entrada.value), V, parseFloat(CtrlBloomUmbral.Entrada.value)),
+      FormatoDec, RegEfecto('Efecto', 'BloomRadio'), { Tipo: 'Efecto', Objetivo: 'BloomRadio' });
+    const CtrlBloomUmbral = this.Deslizador(Cuerpo, 'Umbral Bloom', 0, 1, 0.05, 0.85,
+      (V) => Ctx.Escena.EstablecerBloom(CasillaBloom.checked, parseFloat(CtrlBloomFuerza.Entrada.value), parseFloat(CtrlBloomRadio.Entrada.value), V),
+      FormatoDec, RegEfecto('Efecto', 'BloomUmbral'), { Tipo: 'Efecto', Objetivo: 'BloomUmbral' });
 
-    let RGBShift = 0.0025;
-    const CasillaRGB = this.Casilla(Cuerpo, 'Aberración Cromática', false, (V) => Ctx.Escena.EstablecerAberracionCromatica(V, RGBShift));
-    this.Deslizador(Cuerpo, 'RGB Shift', 0, 0.02, 0.001, RGBShift,
-      (V) => { RGBShift = V; Ctx.Escena.EstablecerAberracionCromatica(CasillaRGB.checked, RGBShift); }, (V) => V.toFixed(4),
-      RegEfecto('Efecto', 'RGBShift'), { Tipo: 'Efecto', Objetivo: 'RGBShift' });
+    const CasillaRGB = this.Casilla(Cuerpo, 'Aberración Cromática', false, (V) => {
+      Ctx.Escena.EstablecerAberracionCromatica(V, parseFloat(CtrlRGB.Entrada.value));
+    });
+    const CtrlRGB = this.Deslizador(Cuerpo, 'RGB Shift', 0, 0.02, 0.001, 0.0025,
+      (V) => Ctx.Escena.EstablecerAberracionCromatica(CasillaRGB.checked, V),
+      (V) => V.toFixed(4), RegEfecto('Efecto', 'RGBShift'), { Tipo: 'Efecto', Objetivo: 'RGBShift' });
 
-    let IntensidadR = 0.35;
-    const CasillaRuido = this.Casilla(Cuerpo, 'Ruido de Película', false, (V) => Ctx.Escena.EstablecerRuido(V, IntensidadR));
-    this.Deslizador(Cuerpo, 'Intensidad Ruido', 0, 1, 0.05, IntensidadR,
-      (V) => { IntensidadR = V; Ctx.Escena.EstablecerRuido(CasillaRuido.checked, IntensidadR); }, undefined,
-      RegEfecto('Efecto', 'RuidoIntensidad'), { Tipo: 'Efecto', Objetivo: 'RuidoIntensidad' });
+    const CasillaRuido = this.Casilla(Cuerpo, 'Ruido de Película', false, (V) => {
+      Ctx.Escena.EstablecerRuido(V, parseFloat(CtrlRuido.Entrada.value));
+    });
+    const CtrlRuido = this.Deslizador(Cuerpo, 'Intensidad Ruido', 0, 1, 0.05, 0.35,
+      (V) => Ctx.Escena.EstablecerRuido(CasillaRuido.checked, V),
+      FormatoDec, RegEfecto('Efecto', 'RuidoIntensidad'), { Tipo: 'Efecto', Objetivo: 'RuidoIntensidad' });
 
-    let OscuridadV = 1.2;
-    const CasillaVigneta = this.Casilla(Cuerpo, 'Viñeta Oscura', false, (V) => Ctx.Escena.EstablecerVigneta(V, OscuridadV, 1.0));
-    this.Deslizador(Cuerpo, 'Intensidad Viñeta', 0, 3, 0.1, OscuridadV,
-      (V) => { OscuridadV = V; Ctx.Escena.EstablecerVigneta(CasillaVigneta.checked, OscuridadV, 1.0); }, undefined,
-      RegEfecto('Efecto', 'VignetaOscuridad'), { Tipo: 'Efecto', Objetivo: 'VignetaOscuridad' });
+    const CasillaVigneta = this.Casilla(Cuerpo, 'Viñeta Oscura', false, (V) => {
+      Ctx.Escena.EstablecerVigneta(V, parseFloat(CtrlVigneta.Entrada.value), 1.0);
+    });
+    const CtrlVigneta = this.Deslizador(Cuerpo, 'Intensidad Viñeta', 0, 3, 0.1, 1.2,
+      (V) => Ctx.Escena.EstablecerVigneta(CasillaVigneta.checked, V, 1.0),
+      FormatoDec, RegEfecto('Efecto', 'VignetaOscuridad'), { Tipo: 'Efecto', Objetivo: 'VignetaOscuridad' });
 
     const Fila = document.createElement('div');
     Fila.className = 'FilaControles';
@@ -921,9 +1071,26 @@ export class PanelLateral {
     Fila.appendChild(Etiqueta);
     Cuerpo.appendChild(Fila);
 
-    this.Deslizador(Cuerpo, 'Cantidad', 50, 1000, 10, 300, (V) => {
+    const CtrlCantidad = this.Deslizador(Cuerpo, 'Cantidad', 50, 1000, 10, 300, (V) => {
       if (Ctx.Efectos.Tipo !== 'Ninguno') Ctx.Efectos.EstablecerParticulas(Ctx.Efectos.Tipo, V);
     }, (V) => String(Math.round(V)));
+
+    this.SincronizadoresEscena.push(() => {
+      const SetVal = (C: { Entrada: HTMLInputElement; Salida: HTMLOutputElement }, Val: number, Fmt: (v: number) => string = FormatoDec) => {
+        C.Entrada.value = String(Val);
+        C.Salida.textContent = Fmt(Val);
+      };
+      SetVal(CtrlExp, Ctx.Escena.Renderer.toneMappingExposure);
+      SetVal(CtrlDir, Ctx.Escena.LuzDireccional.intensity);
+      SetVal(CtrlAmb, Ctx.Escena.LuzAmbiental.intensity);
+      CasillaBloom.checked = Ctx.Escena.BloomActivo;
+      SetVal(CtrlBloomFuerza, Ctx.Escena.BloomFuerza);
+      CasillaRGB.checked = Ctx.Escena.AberracionCromaticaActiva;
+      CasillaRuido.checked = Ctx.Escena.RuidoActivo;
+      CasillaVigneta.checked = Ctx.Escena.VignetaActiva;
+      Selector.value = Ctx.Efectos.Tipo;
+      SetVal(CtrlCantidad, Ctx.Efectos.Cantidad, (V) => String(Math.round(V)));
+    });
   }
 
   private ConstruirSeccionCamara(Padre: HTMLElement): void {
@@ -947,7 +1114,7 @@ export class PanelLateral {
       Ctx.NotificarEstado('Toma de cámara guardada en el instante actual.', 'exito', true);
     }));
 
-    this.Deslizador(Cuerpo, 'Campo Visión (FOV)', 10, 120, 1, Ctx.Escena.Camara.fov,
+    const CtrlFov = this.Deslizador(Cuerpo, 'Campo Visión (FOV)', 10, 120, 1, Ctx.Escena.Camara.fov,
       (V) => { Ctx.Escena.Camara.fov = V; Ctx.Escena.Camara.updateProjectionMatrix(); },
       (V) => `${V.toFixed(0)}°`,
       {
@@ -961,6 +1128,10 @@ export class PanelLateral {
         }
       }
     );
+    this.SincronizadoresEscena.push(() => {
+      CtrlFov.Entrada.value = String(Ctx.Escena.Camara.fov);
+      CtrlFov.Salida.textContent = `${Ctx.Escena.Camara.fov.toFixed(0)}°`;
+    });
   }
 
   private ConstruirSeccionAudio(Padre: HTMLElement): void {
@@ -989,7 +1160,7 @@ export class PanelLateral {
     Cuerpo.appendChild(Fila);
     this.EtiquetaAudio = this.EtiquetaArchivo(Cuerpo);
 
-    this.Deslizador(Cuerpo, 'Volumen', 0, 1, 0.01, 0.9, (V) => Ctx.Audio.EstablecerVolumen(V));
+    const CtrlVolumen = this.Deslizador(Cuerpo, 'Volumen', 0, 1, 0.01, 0.9, (V) => Ctx.Audio.EstablecerVolumen(V));
 
     const Fila2 = document.createElement('div');
     Fila2.className = 'FilaControles';
@@ -1006,6 +1177,12 @@ export class PanelLateral {
     Etiqueta.append(document.createTextNode('Desplazamiento (s) '), EntradaDesplazamiento);
     Fila2.appendChild(Etiqueta);
     Cuerpo.appendChild(Fila2);
+
+    this.SincronizadoresEscena.push(() => {
+      CtrlVolumen.Entrada.value = String(Ctx.Audio.Volumen);
+      CtrlVolumen.Salida.textContent = Ctx.Audio.Volumen.toFixed(2);
+      EntradaDesplazamiento.value = String(Ctx.Audio.Desplazamiento);
+    });
   }
 
   // -------- Pestaña Captura (Tracking IA Python + VMC OSC) --------
@@ -1245,6 +1422,14 @@ export class PanelLateral {
       : 'Ningún archivo cargado';
   }
 
+  public SincronizarControlesEscena(): void {
+    for (const Sync of this.SyncsEscena()) Sync();
+  }
+
+  private SyncsEscena(): Array<() => void> {
+    return this.SincronizadoresEscena;
+  }
+
   public RefrescarDinamico(): void {
     this.ActualizarListaHuesos();
     this.ActualizarExpresiones();
@@ -1252,6 +1437,7 @@ export class PanelLateral {
     this.EtiquetaModelo.textContent = this.Contexto.Modelos.Vrm
       ? `Modelo: ${this.Contexto.Modelos.NombreModelo}`
       : 'Ningún archivo cargado';
+    this.ActualizarChipsHuesoActivo(this.Contexto.Estado.HuesoSeleccionado);
     this.ActualizarIndicadoresClave();
   }
 }

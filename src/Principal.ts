@@ -16,6 +16,7 @@ import { GestorVMC } from './Nucleo/GestorVMC';
 import { BusEventos } from './Arquitectura/BusEventos';
 import { HistorialComandos } from './Arquitectura/HistorialComandos';
 import { EstadoEstudio } from './Arquitectura/EstadoEstudio';
+import { ServicioAutoguardado } from './Arquitectura/ServicioAutoguardado';
 import { LISTA_INTERPOLACIONES } from './Arquitectura/EstrategiasInterpolacion';
 import { ServicioImportacion } from './Arquitectura/ImportadoresAnimacion';
 import {
@@ -29,6 +30,7 @@ import { PanelLateral } from './Interfaz/PanelLateral';
 import { ModalExportacion } from './Interfaz/ModalExportacion';
 import { ModalImportacion } from './Interfaz/ModalImportacion';
 import { SistemaNotificaciones } from './Interfaz/Componentes/SistemaNotificaciones';
+import { ModalAtajos } from './Interfaz/Componentes/ModalAtajos';
 import { ElementoMenuContextual, MenuContextual } from './Interfaz/Componentes/MenuContextual';
 import { ConfirmarAccion, SolicitarNumeroDialogo } from './Interfaz/Componentes/UtilidadesDialogo';
 import {
@@ -89,6 +91,96 @@ const ModalImp = new ModalImportacion(Contexto);
 
 Panel.AlSolicitarImportacion = (Archivo) => void ModalImp.AbrirConArchivo(Archivo);
 
+const ModalGuiaAtajos = new ModalAtajos();
+let MostrarRecuperarInicio = false;
+
+const BotonRecuperarAutosave = document.getElementById('BotonRecuperarAutosave') as HTMLButtonElement;
+const BotonAtajos = document.getElementById('BotonAtajos') as HTMLButtonElement;
+const TarjetaBienvenida = document.getElementById('TarjetaBienvenida')!;
+
+function ActualizarVisibilidadAutosave(): void {
+  const Resumen = MostrarRecuperarInicio ? Autoguardado.ObtenerResumen() : null;
+  if (Resumen) {
+    BotonRecuperarAutosave.classList.remove('Oculto');
+    BotonRecuperarAutosave.title = `Recuperar sesión autoguardada (${Resumen.Pistas} pistas · ${Resumen.Duracion}s)`;
+  } else {
+    BotonRecuperarAutosave.classList.add('Oculto');
+  }
+}
+
+const Autoguardado = new ServicioAutoguardado(Contexto, () => ActualizarVisibilidadAutosave());
+MostrarRecuperarInicio = Autoguardado.TieneRespaldo();
+ActualizarVisibilidadAutosave();
+
+Bus.Suscribir('pistas:cambiadas', (D) => {
+  if (D.motivo !== 'autoguardado-restaurado' && MostrarRecuperarInicio) {
+    MostrarRecuperarInicio = false;
+    ActualizarVisibilidadAutosave();
+  }
+});
+
+BotonAtajos.onclick = () => ModalGuiaAtajos.Abrir();
+
+BotonRecuperarAutosave.onclick = async () => {
+  if (Animacion.Pistas.length > 0) {
+    const Ok = await ConfirmarAccion({
+      Titulo: 'Restaurar sesión autoguardada',
+      Mensaje: 'Se reemplazará la animación actual con la última copia autoguardada.',
+      TextoConfirmar: 'Restaurar'
+    });
+    if (!Ok) return;
+  }
+  MostrarRecuperarInicio = false;
+  ActualizarVisibilidadAutosave();
+  if (Autoguardado.Restaurar()) {
+    EntradaDuracion.value = String(Animacion.Duracion);
+    Panel.SincronizarControlesEscena();
+    Linea.AjustarVista();
+  }
+};
+
+document.getElementById('BotonOcultarBienvenida')!.onclick = () => TarjetaBienvenida.classList.add('Oculto');
+document.getElementById('BotonBienvenidaCargar')!.onclick = async () => {
+  const Archivo = await SeleccionarArchivo('.vrm');
+  if (!Archivo) return;
+  try {
+    Contexto.NotificarEstado(`Cargando ${Archivo.name}…`);
+    Escena.ControlTransformacion.detach();
+    await Modelos.CargarVrm(Archivo);
+    Panel.RefrescarDinamico();
+    Bus.Emitir('modelo:cargado', { nombre: Archivo.name });
+    void SubirArchivoLocal(Archivo, 'models');
+    Contexto.NotificarEstado(`Modelo listo: ${Archivo.name}`, 'exito');
+  } catch (E) {
+    Contexto.NotificarEstado(`Error al cargar: ${(E as Error).message}`, 'error');
+  }
+};
+
+const BotonBienvenidaEjemplo = document.getElementById('BotonBienvenidaEjemplo') as HTMLButtonElement;
+BotonBienvenidaEjemplo.onclick = async () => {
+  BotonBienvenidaEjemplo.disabled = true;
+  BotonBienvenidaEjemplo.textContent = 'Cargando ejemplo…';
+  Contexto.NotificarEstado('Descargando modelo de ejemplo…');
+  try {
+    Escena.ControlTransformacion.detach();
+    await Modelos.CargarVrmDesdeUrl(
+      'https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/three-vrm-girl.vrm'
+    );
+    Panel.RefrescarDinamico();
+    Bus.Emitir('modelo:cargado', { nombre: Modelos.NombreModelo });
+    Contexto.NotificarEstado('Modelo de ejemplo listo para animar.', 'exito');
+  } catch (E) {
+    Contexto.NotificarEstado(`Error al cargar ejemplo: ${(E as Error).message}`, 'error');
+  } finally {
+    BotonBienvenidaEjemplo.disabled = false;
+    BotonBienvenidaEjemplo.textContent = '✨ Probar modelo de ejemplo';
+  }
+};
+
+Bus.Suscribir('modelo:cargado', () => {
+  TarjetaBienvenida.classList.add('Oculto');
+});
+
 // ----------------------------------------------------------------------------
 // Referencias del DOM y actualización reactiva de interfaz
 // ----------------------------------------------------------------------------
@@ -121,10 +213,21 @@ const BotonGizmoRotar = document.getElementById('BotonGizmoRotar') as HTMLButton
 const BotonGizmoEspacio = document.getElementById('BotonGizmoEspacio') as HTMLButtonElement;
 const BotonEsqueletoVisor = document.getElementById('BotonEsqueletoVisor') as HTMLButtonElement;
 
+let UltimoTextoTiempo = '';
+let UltimoTextoCuadro = '';
+
 function ActualizarIndicadoresTiempo(): void {
-  IndicadorTiempo.textContent = `${FormatearTiempo(Animacion.TiempoActual)} / ${FormatearTiempo(Animacion.Duracion)}`;
+  const TextoT = `${FormatearTiempo(Animacion.TiempoActual)} / ${FormatearTiempo(Animacion.Duracion)}`;
+  if (TextoT !== UltimoTextoTiempo) {
+    UltimoTextoTiempo = TextoT;
+    IndicadorTiempo.textContent = TextoT;
+  }
   const Cuadro = Math.round(Animacion.TiempoActual * 30);
-  IndicadorCuadro.textContent = `F${String(Cuadro).padStart(3, '0')}`;
+  const TextoC = `F${String(Cuadro).padStart(3, '0')}`;
+  if (TextoC !== UltimoTextoCuadro) {
+    UltimoTextoCuadro = TextoC;
+    IndicadorCuadro.textContent = TextoC;
+  }
 }
 
 function ActualizarEstadoBotonPose(): void {
@@ -169,6 +272,7 @@ Bus.Suscribir('tiempo:cambiado', () => {
 Bus.Suscribir('reproduccion:cambiada', (R) => {
   BotonReproducir.textContent = R.reproduciendo ? '⏸' : '▶';
   BotonReproducir.setAttribute('aria-pressed', String(R.reproduciendo));
+  if (!R.reproduciendo) ActualizarEstadoBotonPose();
 });
 
 Bus.Suscribir('hueso:seleccionado', (D) => {
@@ -354,6 +458,10 @@ document.getElementById('BotonReposoVisor')!.onclick = () => {
   Modelos.RestablecerPose();
   Panel.SincronizarDeslizadoresHueso();
 };
+document.getElementById('BotonCamFrontal')!.onclick = () => Escena.EnfocarVistaPreajuste('frontal');
+document.getElementById('BotonCamTresCuartos')!.onclick = () => Escena.EnfocarVistaPreajuste('tresCuartos');
+document.getElementById('BotonCamPerfil')!.onclick = () => Escena.EnfocarVistaPreajuste('perfil');
+document.getElementById('BotonCamRostro')!.onclick = () => Escena.EnfocarVistaPreajuste('rostro');
 
 // ----------------------------------------------------------------------------
 // Divisor redimensionable del timeline (ratón + teclado)
@@ -733,6 +841,8 @@ document.getElementById('BotonNuevoProyecto')!.onclick = async () => {
   Historial.Limpiar();
   Estado.LimpiarSeleccion();
   Modelos.RestablecerPose();
+  MostrarRecuperarInicio = false;
+  Autoguardado.LimpiarRespaldo();
   EntradaDuracion.value = String(Animacion.Duracion);
   Bus.Emitir('proyecto:cargado', {});
   Contexto.NotificarEstado('Proyecto nuevo listo.', 'info');
@@ -774,6 +884,7 @@ async function AbrirProyecto(Archivo: File): Promise<void> {
   Historial.Limpiar();
   Estado.LimpiarSeleccion();
   Animacion.NotificarCambioPistas('proyecto-abierto');
+  Animacion.EvaluarEn(0);
   Bus.Emitir('proyecto:cargado', {});
   Contexto.NotificarEstado(
     `Proyecto cargado (${Datos.Pistas.length} pistas).` +
@@ -809,7 +920,10 @@ async function SubirArchivoLocal(Archivo: File, Categoria: string): Promise<void
   const formData = new FormData();
   formData.append('file', Archivo);
   formData.append('category', Categoria);
-  try { await fetch('/api/upload', { method: 'POST', body: formData }); } catch {}
+  try {
+    const Res = await fetch('/api/upload', { method: 'POST', body: formData });
+    if (Res.ok) Panel.RefrescarBibliotecaLocal();
+  } catch {}
 }
 
 Linea.AlSoltarArchivo = (Archivo, Tiempo) => {
@@ -873,15 +987,40 @@ ContenedorVisor.addEventListener('drop', async (E) => {
 // Atajos de teclado del estudio
 // ----------------------------------------------------------------------------
 
+function EsCampoEscrituraActivo(Objetivo: EventTarget | null): boolean {
+  if (!(Objetivo instanceof HTMLElement)) return false;
+  if (Objetivo.isContentEditable) return true;
+  if (Objetivo instanceof HTMLTextAreaElement || Objetivo instanceof HTMLSelectElement) return true;
+  if (Objetivo instanceof HTMLInputElement) {
+    return (
+      Objetivo.type !== 'range' &&
+      Objetivo.type !== 'checkbox' &&
+      Objetivo.type !== 'radio' &&
+      Objetivo.type !== 'color' &&
+      Objetivo.type !== 'button'
+    );
+  }
+  return false;
+}
+
 window.addEventListener('keydown', (E) => {
   if (document.querySelector('dialog[open]')) return;
-  const Objetivo = E.target as HTMLElement;
-  if (Objetivo.tagName === 'INPUT' || Objetivo.tagName === 'SELECT' || Objetivo.tagName === 'TEXTAREA') return;
+  const Objetivo = E.target as HTMLElement | null;
+  if (EsCampoEscrituraActivo(Objetivo)) return;
 
   const Ctrl = E.ctrlKey || E.metaKey;
   const Tecla = E.key.toLowerCase();
 
-  if (Ctrl && Tecla === 'z' && !E.shiftKey) {
+  if (Ctrl && Tecla === 's') {
+    E.preventDefault();
+    document.getElementById('BotonGuardarProyecto')!.click();
+  } else if (Ctrl && Tecla === 'o') {
+    E.preventDefault();
+    document.getElementById('BotonAbrirProyecto')!.click();
+  } else if ((E.key === '?' || (Tecla === '/' && E.shiftKey)) && !Ctrl) {
+    E.preventDefault();
+    ModalGuiaAtajos.Abrir();
+  } else if (Ctrl && Tecla === 'z' && !E.shiftKey) {
     E.preventDefault();
     Historial.Deshacer();
     Panel.SincronizarDeslizadoresHueso();
@@ -902,6 +1041,7 @@ window.addEventListener('keydown', (E) => {
     E.preventDefault();
     Linea.SeleccionarTodas();
   } else if (E.code === 'Space') {
+    if (Objetivo instanceof HTMLButtonElement) return;
     E.preventDefault();
     AlternarReproduccion();
   } else if (E.key === 'Delete' || E.key === 'Backspace') {
@@ -926,6 +1066,7 @@ window.addEventListener('keydown', (E) => {
     Animacion.EstablecerTiempo(Animacion.Duracion, 'usuario');
     Animacion.EvaluarEn(Animacion.Duracion);
   } else if (E.key === 'ArrowLeft' || E.key === 'ArrowRight') {
+    if (Objetivo instanceof HTMLInputElement && Objetivo.type === 'range') return;
     const Paso = E.shiftKey ? 1 : 1 / 30;
     Animacion.EstablecerTiempo(Animacion.TiempoActual + (E.key === 'ArrowRight' ? Paso : -Paso), 'usuario');
     Animacion.EvaluarEn(Animacion.TiempoActual);
@@ -948,6 +1089,14 @@ window.addEventListener('keydown', (E) => {
   } else if (Tecla === 'r') {
     Escena.ControlTransformacion.setSpace(Escena.ControlTransformacion.space === 'local' ? 'world' : 'local');
     SincronizarBotonesGizmo();
+  } else if (!Ctrl && !E.altKey && !E.shiftKey && Tecla === '1') {
+    Escena.EnfocarVistaPreajuste('frontal');
+  } else if (!Ctrl && !E.altKey && !E.shiftKey && Tecla === '2') {
+    Escena.EnfocarVistaPreajuste('tresCuartos');
+  } else if (!Ctrl && !E.altKey && !E.shiftKey && Tecla === '3') {
+    Escena.EnfocarVistaPreajuste('perfil');
+  } else if (!Ctrl && !E.altKey && !E.shiftKey && Tecla === '4') {
+    Escena.EnfocarVistaPreajuste('rostro');
   }
 });
 
@@ -972,7 +1121,6 @@ function Bucle(Ahora: number): void {
     }
     Animacion.EvaluarEn(Animacion.TiempoActual);
     ActualizarIndicadoresTiempo();
-    ActualizarEstadoBotonPose();
     Linea.SolicitarDibujo();
   }
 

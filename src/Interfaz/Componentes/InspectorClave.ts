@@ -25,6 +25,11 @@ const ICONO_POR_CURVA: Record<TipoInterpolacion, NombreIcono> = {
 export class InspectorClave {
   private Desuscripciones: (() => void)[] = [];
   private EditandoEnVivo = false;
+  private ClaveRenderizadaFirma: string | null = null;
+  private InputTiempoActual: HTMLInputElement | null = null;
+  private ContenedorCurvasActual: HTMLElement | null = null;
+  private EntradasValorActual: Array<{ Entrada: HTMLInputElement; Tipo: string }> = [];
+  private SnapshotValorActual: ClaveAnimacion | null = null;
 
   constructor(
     private readonly Contenedor: HTMLElement,
@@ -59,10 +64,11 @@ export class InspectorClave {
   }
 
   public Renderizar(): void {
-    this.Contenedor.innerHTML = '';
     const Seleccion = this.Contexto.Estado.SeleccionClaves;
 
     if (Seleccion.length === 0) {
+      this.LimpiarReferenciasClaveUnica();
+      this.Contenedor.innerHTML = '';
       this.RenderizarSinSeleccion();
       return;
     }
@@ -72,12 +78,72 @@ export class InspectorClave {
       const Pista = this.Contexto.Animacion.Pistas.find((P) => P.Id === Sel.PistaId);
       const Clave = Pista?.Claves.find((C) => C.Id === Sel.ClaveId);
       if (Pista && Clave) {
+        const Bloqueada = Boolean(Pista.Bloqueada);
+        const Firma = `${Pista.Id}|${Clave.Id}|${Bloqueada ? 1 : 0}|${Clave.Valor.length}`;
+        if (this.ClaveRenderizadaFirma === Firma && this.Contenedor.contains(document.activeElement)) {
+          this.ActualizarClaveUnicaEnVivo(Pista, Clave);
+          return;
+        }
+        this.LimpiarReferenciasClaveUnica();
+        this.Contenedor.innerHTML = '';
+        this.ClaveRenderizadaFirma = Firma;
         this.RenderizarClaveUnica(Pista, Clave);
         return;
       }
     }
 
+    this.LimpiarReferenciasClaveUnica();
+    this.Contenedor.innerHTML = '';
     this.RenderizarSeleccionMultiple();
+  }
+
+  private LimpiarReferenciasClaveUnica(): void {
+    this.ClaveRenderizadaFirma = null;
+    this.InputTiempoActual = null;
+    this.ContenedorCurvasActual = null;
+    this.EntradasValorActual = [];
+    this.SnapshotValorActual = null;
+  }
+
+  private FormatearValorEntrada(TipoPista: string, ValorNum: number): string {
+    if (TipoPista === 'HuesoRotacion') return AGrados(ValorNum).toFixed(1);
+    if (TipoPista === 'Expresion') return (ValorNum * 100).toFixed(0);
+    return ValorNum.toFixed(3);
+  }
+
+  private ActualizarClaveUnicaEnVivo(Pista: PistaAnimacion, Clave: ClaveAnimacion): void {
+    const Anim = this.Contexto.Animacion;
+    const Activo = document.activeElement;
+
+    if (this.InputTiempoActual) {
+      this.InputTiempoActual.max = String(Anim.Duracion);
+      if (Activo !== this.InputTiempoActual) {
+        this.InputTiempoActual.value = Clave.Tiempo.toFixed(3);
+      }
+    }
+
+    if (this.ContenedorCurvasActual) {
+      const CurvaActiva = Clave.Interpolacion ?? 'Suave';
+      const Botones = this.ContenedorCurvasActual.querySelectorAll('button');
+      LISTA_INTERPOLACIONES.forEach((Est, Indice) => {
+        Botones[Indice]?.setAttribute('aria-pressed', String(CurvaActiva === Est.Tipo));
+      });
+    }
+
+    this.EntradasValorActual.forEach((Ref, I) => {
+      if (Activo !== Ref.Entrada && I < Clave.Valor.length) {
+        Ref.Entrada.value = this.FormatearValorEntrada(Ref.Tipo, Clave.Valor[I]);
+      }
+    });
+
+    if (!this.EditandoEnVivo) {
+      this.SnapshotValorActual = {
+        Id: Clave.Id,
+        Tiempo: Clave.Tiempo,
+        Valor: [...Clave.Valor],
+        Interpolacion: Clave.Interpolacion
+      };
+    }
   }
 
   private CrearSelectorCurvas(
@@ -270,8 +336,10 @@ export class InspectorClave {
     InputT.max = String(Anim.Duracion);
     InputT.value = Clave.Tiempo.toFixed(3);
     InputT.disabled = Bloqueada;
+    this.InputTiempoActual = InputT;
     InputT.onchange = () => {
       const NuevoT = Limitar(parseFloat(InputT.value) || 0, 0, Anim.Duracion);
+      if (this.SnapshotValorActual) this.SnapshotValorActual.Tiempo = NuevoT;
       const Cmd = new ComandoModificarClave(Anim, Pista.Id, Clave.Id, { Tiempo: NuevoT });
       this.Contexto.Historial.Ejecutar(Cmd);
       this.Contexto.NotificarEstado(`Clave movida a ${FormatearTiempo(NuevoT)}.`, 'info', true);
@@ -291,6 +359,7 @@ export class InspectorClave {
       },
       Bloqueada
     );
+    this.ContenedorCurvasActual = SelectorCurva;
     Tarjeta.append(LabelCurva, SelectorCurva);
 
     // Editor directo de valores
@@ -365,12 +434,13 @@ export class InspectorClave {
     Bloqueada: boolean
   ): void {
     const Anim = this.Contexto.Animacion;
-    const SnapshotInicial: ClaveAnimacion = {
+    this.SnapshotValorActual = {
       Id: Clave.Id,
       Tiempo: Clave.Tiempo,
       Valor: [...Clave.Valor],
       Interpolacion: Clave.Interpolacion
     };
+    this.EntradasValorActual = [];
     const EsRotacion = Pista.Tipo === 'HuesoRotacion';
     const Etiquetas = Clave.Valor.length === 3
       ? ['X', 'Y', 'Z']
@@ -391,16 +461,15 @@ export class InspectorClave {
         Entrada.step = '1';
         Entrada.min = '-180';
         Entrada.max = '180';
-        Entrada.value = AGrados(Clave.Valor[I]).toFixed(1);
       } else if (Pista.Tipo === 'Expresion') {
         Entrada.step = '1';
         Entrada.min = '0';
         Entrada.max = '100';
-        Entrada.value = (Clave.Valor[I] * 100).toFixed(0);
       } else {
         Entrada.step = '0.02';
-        Entrada.value = Clave.Valor[I].toFixed(3);
       }
+      Entrada.value = this.FormatearValorEntrada(Pista.Tipo, Clave.Valor[I]);
+      this.EntradasValorActual.push({ Entrada, Tipo: Pista.Tipo });
 
       Entrada.oninput = () => {
         const Num = parseFloat(Entrada.value);
@@ -417,7 +486,16 @@ export class InspectorClave {
         if (!Number.isFinite(Num)) return;
         const NuevoValor = [...Clave.Valor];
         NuevoValor[I] = EsRotacion ? ARadianes(Num) : Pista.Tipo === 'Expresion' ? Limitar(Num / 100, 0, 1) : Num;
-        const Cmd = new ComandoModificarClave(Anim, Pista.Id, Clave.Id, { Valor: NuevoValor }, SnapshotInicial);
+        const SnapshotPrevio = this.SnapshotValorActual
+          ? { ...this.SnapshotValorActual, Valor: [...this.SnapshotValorActual.Valor] }
+          : undefined;
+        this.SnapshotValorActual = {
+          Id: Clave.Id,
+          Tiempo: Clave.Tiempo,
+          Valor: [...NuevoValor],
+          Interpolacion: Clave.Interpolacion
+        };
+        const Cmd = new ComandoModificarClave(Anim, Pista.Id, Clave.Id, { Valor: NuevoValor }, SnapshotPrevio);
         this.Contexto.Historial.Ejecutar(Cmd);
       };
 
