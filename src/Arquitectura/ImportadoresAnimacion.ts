@@ -133,6 +133,26 @@ function TransformarPistasImportadas(
   };
 }
 
+/** Caché por archivo para no re-parsear entre vista previa e importación final. */
+interface EntradaCacheImportacion {
+  clip?: THREE.AnimationClip;
+  vrmRef?: unknown;
+  json?: any;
+  bvh?: { clip: THREE.AnimationClip; skeleton: THREE.Skeleton };
+  gltfClip?: THREE.AnimationClip;
+}
+
+const CacheArchivosImportacion = new WeakMap<File, EntradaCacheImportacion>();
+
+function ObtenerEntradaCache(archivo: File): EntradaCacheImportacion {
+  let Entrada = CacheArchivosImportacion.get(archivo);
+  if (!Entrada) {
+    Entrada = {};
+    CacheArchivosImportacion.set(archivo, Entrada);
+  }
+  return Entrada;
+}
+
 // ----------------------------------------------------------------------------
 // Estrategia 1: VRMA (.vrma)
 // ----------------------------------------------------------------------------
@@ -145,11 +165,20 @@ class ImportadorVrma implements EstrategiaImportacion {
     return archivo.name.toLowerCase().endsWith('.vrma');
   }
 
-  public async Previsualizar(archivo: File, ctx: ContextoAplicacion): Promise<VistaPreviaImportacion> {
+  private async ObtenerClip(archivo: File, ctx: ContextoAplicacion): Promise<THREE.AnimationClip> {
     if (!ctx.Modelos.Vrm) {
       throw new Error('Carga primero un modelo VRM antes de importar un archivo .vrma.');
     }
-    const Clip = await ctx.Modelos.CargarAnimacionVrma(archivo);
+    const Cache = ObtenerEntradaCache(archivo);
+    if (!Cache.clip || Cache.vrmRef !== ctx.Modelos.Vrm) {
+      Cache.clip = await ctx.Modelos.CargarAnimacionVrma(archivo);
+      Cache.vrmRef = ctx.Modelos.Vrm;
+    }
+    return Cache.clip;
+  }
+
+  public async Previsualizar(archivo: File, ctx: ContextoAplicacion): Promise<VistaPreviaImportacion> {
+    const Clip = await this.ObtenerClip(archivo, ctx);
     const Duracion = Math.max(0.1, Clip.duration);
     return {
       Nombre: archivo.name,
@@ -165,10 +194,7 @@ class ImportadorVrma implements EstrategiaImportacion {
     opciones: OpcionesImportacionAnimacion,
     ctx: ContextoAplicacion
   ): Promise<ResultadoImportacion> {
-    if (!ctx.Modelos.Vrm) {
-      throw new Error('Carga primero un modelo VRM.');
-    }
-    const Clip = await ctx.Modelos.CargarAnimacionVrma(archivo);
+    const Clip = await this.ObtenerClip(archivo, ctx);
     const PistasHorneadas = ctx.Animacion.HornearClip(
       Clip,
       opciones.FpsMuestreo,
@@ -199,8 +225,16 @@ class ImportadorJson implements EstrategiaImportacion {
     return archivo.name.toLowerCase().endsWith('.json');
   }
 
+  private async ObtenerDatos(archivo: File): Promise<any> {
+    const Cache = ObtenerEntradaCache(archivo);
+    if (!Cache.json) {
+      Cache.json = JSON.parse(await LeerArchivoTexto(archivo));
+    }
+    return Cache.json;
+  }
+
   public async Previsualizar(archivo: File): Promise<VistaPreviaImportacion> {
-    const Datos = JSON.parse(await LeerArchivoTexto(archivo));
+    const Datos = await this.ObtenerDatos(archivo);
     if (!Array.isArray(Datos.Pistas)) {
       throw new Error('El archivo JSON no contiene un arreglo de "Pistas" válido.');
     }
@@ -230,7 +264,7 @@ class ImportadorJson implements EstrategiaImportacion {
     opciones: OpcionesImportacionAnimacion,
     ctx: ContextoAplicacion
   ): Promise<ResultadoImportacion> {
-    const Datos = JSON.parse(await LeerArchivoTexto(archivo));
+    const Datos = await this.ObtenerDatos(archivo);
     if (!Array.isArray(Datos.Pistas)) {
       throw new Error('Formato JSON no reconocido.');
     }
@@ -346,9 +380,17 @@ class ImportadorBvh implements EstrategiaImportacion {
     return archivo.name.toLowerCase().endsWith('.bvh');
   }
 
+  private async ObtenerBvh(archivo: File): Promise<{ clip: THREE.AnimationClip; skeleton: THREE.Skeleton }> {
+    const Cache = ObtenerEntradaCache(archivo);
+    if (!Cache.bvh) {
+      const Texto = await LeerArchivoTexto(archivo);
+      Cache.bvh = new BVHLoader().parse(Texto);
+    }
+    return Cache.bvh;
+  }
+
   public async Previsualizar(archivo: File): Promise<VistaPreviaImportacion> {
-    const Texto = await LeerArchivoTexto(archivo);
-    const { clip } = new BVHLoader().parse(Texto);
+    const { clip } = await this.ObtenerBvh(archivo);
     const Duracion = Math.max(0.1, clip.duration);
     const Pistas = ExtraerPistasDesdeClip(clip, 12, 'Importado', 1);
     return {
@@ -365,8 +407,7 @@ class ImportadorBvh implements EstrategiaImportacion {
     opciones: OpcionesImportacionAnimacion,
     ctx: ContextoAplicacion
   ): Promise<ResultadoImportacion> {
-    const Texto = await LeerArchivoTexto(archivo);
-    const { clip, skeleton } = new BVHLoader().parse(Texto);
+    const { clip, skeleton } = await this.ObtenerBvh(archivo);
 
     // Estimar escala de unidades (cm/pulgadas -> metros) midiendo la caja del esqueleto en reposo
     let MinY = Infinity;
@@ -410,12 +451,20 @@ class ImportadorGltfAnimacion implements EstrategiaImportacion {
     return N.endsWith('.glb') || N.endsWith('.gltf');
   }
 
-  public async Previsualizar(archivo: File): Promise<VistaPreviaImportacion> {
-    const Gltf = await new GLTFLoader().parseAsync(await archivo.arrayBuffer(), '');
-    if (!Gltf.animations || Gltf.animations.length === 0) {
-      throw new Error('El archivo GLB/GLTF no contiene clips de animación.');
+  private async ObtenerClip(archivo: File): Promise<THREE.AnimationClip> {
+    const Cache = ObtenerEntradaCache(archivo);
+    if (!Cache.gltfClip) {
+      const Gltf = await new GLTFLoader().parseAsync(await archivo.arrayBuffer(), '');
+      if (!Gltf.animations || Gltf.animations.length === 0) {
+        throw new Error('El archivo GLB/GLTF no contiene clips de animación.');
+      }
+      Cache.gltfClip = Gltf.animations[0];
     }
-    const Clip = Gltf.animations[0];
+    return Cache.gltfClip;
+  }
+
+  public async Previsualizar(archivo: File): Promise<VistaPreviaImportacion> {
+    const Clip = await this.ObtenerClip(archivo);
     const Pistas = ExtraerPistasDesdeClip(Clip, 12, 'Importado', 1);
     return {
       Nombre: archivo.name,
@@ -431,11 +480,7 @@ class ImportadorGltfAnimacion implements EstrategiaImportacion {
     opciones: OpcionesImportacionAnimacion,
     ctx: ContextoAplicacion
   ): Promise<ResultadoImportacion> {
-    const Gltf = await new GLTFLoader().parseAsync(await archivo.arrayBuffer(), '');
-    if (!Gltf.animations || Gltf.animations.length === 0) {
-      throw new Error('El archivo GLB/GLTF no contiene animaciones.');
-    }
-    const Clip = Gltf.animations[0];
+    const Clip = await this.ObtenerClip(archivo);
     const Crudas = ExtraerPistasDesdeClip(Clip, opciones.FpsMuestreo, opciones.GrupoDestino, 1);
     if (Crudas.length === 0) {
       throw new Error('No se encontraron huesos humanoides reconocibles en el clip.');

@@ -275,5 +275,20 @@ function localAssetsPlugin() {
 }
 
 export default defineConfig({
-  plugins: [localAssetsPlugin()]
+  plugins: [localAssetsPlugin()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/@pixiv/')) {
+            return 'vendor-vrm';
+          }
+          if (id.includes('node_modules/three/')) {
+            return 'vendor-three';
+          }
+          return undefined;
+        }
+      }
+    }
+  }
 });

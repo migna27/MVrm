@@ -24,6 +24,7 @@ export class ModalImportacion {
   private InputTolerancia!: HTMLInputElement;
   private OutTolerancia!: HTMLOutputElement;
   private BotonConfirmar!: HTMLButtonElement;
+  private BotonCargarEjemplo!: HTMLButtonElement;
 
   constructor(private readonly Contexto: ContextoAplicacion) {
     this.Dialogo = this.ConstruirDialogo();
@@ -34,10 +35,14 @@ export class ModalImportacion {
   public async AbrirConArchivo(archivo: File): Promise<void> {
     this.ArchivoActual = archivo;
     this.ResumenArchivo.textContent = `Analizando "${archivo.name}"…`;
+    if (this.SelectorAncla.options.length > 0) {
+      this.SelectorAncla.options[0].textContent = `Cabezal actual (${FormatearTiempo(this.Contexto.Animacion.TiempoActual)})`;
+    }
     this.InputTiempoInicio.value = this.Contexto.Animacion.TiempoActual.toFixed(2);
     this.SelectorAncla.value = 'cabezal';
     this.InputTiempoInicio.disabled = true;
     this.BotonConfirmar.disabled = true;
+    this.BotonCargarEjemplo.classList.add('Oculto');
 
     if (!this.Dialogo.open) this.Dialogo.showModal();
 
@@ -49,6 +54,9 @@ export class ModalImportacion {
       this.BotonConfirmar.disabled = false;
     } catch (E) {
       this.ResumenArchivo.textContent = `Error al leer archivo: ${(E as Error).message}`;
+      if (!this.Contexto.Modelos.Vrm && archivo.name.toLowerCase().endsWith('.vrma')) {
+        this.BotonCargarEjemplo.classList.remove('Oculto');
+      }
       this.Contexto.NotificarEstado((E as Error).message, 'error');
     }
   }
@@ -83,6 +91,28 @@ export class ModalImportacion {
     this.ResumenArchivo = document.createElement('p');
     this.ResumenArchivo.className = 'ResumenBannerDialogo';
     Cuerpo.appendChild(this.ResumenArchivo);
+
+    this.BotonCargarEjemplo = document.createElement('button');
+    this.BotonCargarEjemplo.type = 'button';
+    this.BotonCargarEjemplo.className = 'Oculto';
+    this.BotonCargarEjemplo.textContent = 'Cargar modelo de ejemplo y reintentar';
+    this.BotonCargarEjemplo.onclick = async () => {
+      this.BotonCargarEjemplo.disabled = true;
+      this.ResumenArchivo.textContent = 'Descargando modelo de ejemplo…';
+      try {
+        await this.Contexto.Modelos.CargarVrmDesdeUrl(
+          'https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/three-vrm-girl.vrm'
+        );
+        this.Contexto.Escena.ControlTransformacion.detach();
+        this.Contexto.Bus.Emitir('modelo:cargado', { nombre: this.Contexto.Modelos.NombreModelo });
+        if (this.ArchivoActual) await this.AbrirConArchivo(this.ArchivoActual);
+      } catch (E) {
+        this.ResumenArchivo.textContent = `Error al cargar ejemplo: ${(E as Error).message}`;
+      } finally {
+        this.BotonCargarEjemplo.disabled = false;
+      }
+    };
+    Cuerpo.appendChild(this.BotonCargarEjemplo);
 
     const Rejilla = document.createElement('div');
     Rejilla.className = 'RejillaDialogo';

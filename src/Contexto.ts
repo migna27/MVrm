@@ -9,7 +9,6 @@ import type { GestorModelos } from './Nucleo/GestorModelos';
 import type { GestorAnimacion } from './Nucleo/GestorAnimacion';
 import type { GestorAudio } from './Nucleo/GestorAudio';
 import type { GestorEfectos } from './Nucleo/GestorEfectos';
-import type { GestorTracking } from './Nucleo/GestorTracking';
 import type { GestorExportacion } from './Nucleo/GestorExportacion';
 import type { GestorVMC } from './Nucleo/GestorVMC';
 import type { BusEventos } from './Arquitectura/BusEventos';
@@ -26,7 +25,6 @@ export interface ContextoAplicacion {
   Animacion: GestorAnimacion;
   Audio: GestorAudio;
   Efectos: GestorEfectos;
-  Tracking: GestorTracking;
   Exportador: GestorExportacion;
   VMC: GestorVMC;
   Importador: ServicioImportacion;

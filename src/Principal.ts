@@ -11,7 +11,6 @@ import { GestorModelos, NOMBRES_HUESOS_LEGIBLES } from './Nucleo/GestorModelos';
 import { GestorAnimacion } from './Nucleo/GestorAnimacion';
 import { GestorAudio } from './Nucleo/GestorAudio';
 import { GestorEfectos, TipoParticulas } from './Nucleo/GestorEfectos';
-import { GestorTracking } from './Nucleo/GestorTracking';
 import { GestorExportacion } from './Nucleo/GestorExportacion';
 import { GestorVMC } from './Nucleo/GestorVMC';
 import { BusEventos } from './Arquitectura/BusEventos';
@@ -51,7 +50,6 @@ const Modelos = new GestorModelos(Escena.Escena);
 const Animacion = new GestorAnimacion(Modelos, Escena, Bus);
 const Audio = new GestorAudio();
 const Efectos = new GestorEfectos(Escena.Escena);
-const Tracking = new GestorTracking();
 const Exportador = new GestorExportacion();
 const Importador = new ServicioImportacion();
 const Notificaciones = new SistemaNotificaciones(Bus, Historial);
@@ -69,7 +67,6 @@ const Contexto: ContextoAplicacion = {
   Animacion,
   Audio,
   Efectos,
-  Tracking,
   Exportador,
   VMC: null as unknown as GestorVMC,
   Importador,
