@@ -1,16 +1,24 @@
+// ============================================================================
+// ModalExportacion.ts — Diálogo modal nativo (<dialog>) para exportar video
+// ============================================================================
+
 import { ContextoAplicacion } from '../Contexto';
 import { RESOLUCIONES_EXPORTACION, OpcionesExportacion } from '../Tipos';
+import { ConfigurarLightDismissFallback } from './Componentes/UtilidadesDialogo';
+import { CrearIcono } from './Componentes/Iconos';
 
 export class ModalExportacion {
-  private Modal: HTMLElement;
+  private Dialogo: HTMLDialogElement;
   private BarraExportacion!: HTMLElement;
   private TextoExportacion!: HTMLElement;
-  
-  constructor(private Contexto: ContextoAplicacion) {
-    this.Modal = this.ConstruirModal();
-    document.body.appendChild(this.Modal);
+  private ResumenRender!: HTMLElement;
+  private SelectorFps!: HTMLSelectElement;
 
-    // Enlazar botón superior (asumiendo que se creará en index.html)
+  constructor(private Contexto: ContextoAplicacion) {
+    this.Dialogo = this.ConstruirDialogo();
+    document.body.appendChild(this.Dialogo);
+    ConfigurarLightDismissFallback(this.Dialogo);
+
     const BotonAbrir = document.getElementById('BotonAbrirExportacion');
     if (BotonAbrir) {
       BotonAbrir.onclick = () => this.Abrir();
@@ -19,135 +27,169 @@ export class ModalExportacion {
 
   public Abrir(): void {
     if (!this.Contexto.Modelos.Vrm) {
-      this.Contexto.NotificarEstado('Carga primero un modelo VRM antes de exportar.');
-      // return; // Quitamos el return estricto para que pueda ver la UI, pero es buena práctica avisar
+      this.Contexto.NotificarEstado('Carga primero un modelo VRM antes de exportar.', 'aviso');
     }
-    this.Modal.classList.remove('Oculto');
+    this.ActualizarResumen();
+    if (!this.Dialogo.open) {
+      this.Dialogo.showModal();
+    }
   }
 
   public Cerrar(): void {
     if (this.Contexto.Exportador.Exportando) {
-      this.Contexto.NotificarEstado('Debes cancelar o esperar a que termine la exportación.');
+      this.Contexto.NotificarEstado('Debes cancelar o esperar a que termine la exportación.', 'aviso');
       return;
     }
-    this.Modal.classList.add('Oculto');
+    if (this.Dialogo.open) this.Dialogo.close();
   }
 
-  private ConstruirModal(): HTMLElement {
+  private ActualizarResumen(): void {
+    const Fps = parseInt(this.SelectorFps?.value || '30', 10);
+    const Dur = this.Contexto.Animacion.Duracion;
+    const TotalCuadros = Math.max(1, Math.round(Dur * Fps));
+    if (this.ResumenRender) {
+      this.ResumenRender.textContent = `Duración: ${Dur.toFixed(1)}s · Total: ${TotalCuadros} cuadros a renderizar`;
+    }
+  }
+
+  private ConstruirDialogo(): HTMLDialogElement {
     const Ctx = this.Contexto;
 
-    const ContenedorOverlay = document.createElement('div');
-    ContenedorOverlay.className = 'OverlayModal Oculto';
-    // Cerrar al hacer clic fuera
-    ContenedorOverlay.onmousedown = (e) => {
-      if (e.target === ContenedorOverlay) this.Cerrar();
-    };
+    const Dialogo = document.createElement('dialog');
+    Dialogo.id = 'ModalExportacion';
+    Dialogo.className = 'DialogoEstudio';
+    Dialogo.setAttribute('closedby', 'any');
+    Dialogo.setAttribute('aria-labelledby', 'TituloModalExportacion');
 
-    const Ventana = document.createElement('div');
-    Ventana.className = 'VentanaModal';
+    Dialogo.addEventListener('cancel', (E) => {
+      if (Ctx.Exportador.Exportando) {
+        E.preventDefault();
+        Ctx.NotificarEstado('No puedes cerrar mientras se exporta. Usa el botón Cancelar.', 'aviso');
+      }
+    });
+
+    Dialogo.addEventListener('close', () => {
+      Dialogo.returnValue = '';
+    });
 
     const Cabecera = document.createElement('div');
-    Cabecera.className = 'CabeceraModal';
+    Cabecera.className = 'CabeceraDialogo';
     const Titulo = document.createElement('h2');
-    Titulo.textContent = 'Exportar Animación';
+    Titulo.id = 'TituloModalExportacion';
+    Titulo.textContent = 'Exportar Video del Timeline';
+
     const BotonCerrar = document.createElement('button');
+    BotonCerrar.type = 'button';
     BotonCerrar.className = 'BotonCerrar';
-    BotonCerrar.innerHTML = '&times;';
+    BotonCerrar.setAttribute('aria-label', 'Cerrar diálogo');
+    BotonCerrar.appendChild(CrearIcono('close'));
     BotonCerrar.onclick = () => this.Cerrar();
     Cabecera.append(Titulo, BotonCerrar);
 
     const Cuerpo = document.createElement('div');
-    Cuerpo.className = 'CuerpoModal';
+    Cuerpo.className = 'CuerpoDialogo';
 
-    // Construcción de controles
-    const EtiquetaRes = document.createElement('label');
-    EtiquetaRes.className = 'EtiquetaCompacta';
+    this.ResumenRender = document.createElement('p');
+    this.ResumenRender.className = 'ResumenBannerDialogo';
+
+    const CampoRes = document.createElement('div');
+    CampoRes.className = 'CampoDialogo';
+    const LblRes = document.createElement('label');
+    LblRes.htmlFor = 'ExpRes';
+    LblRes.textContent = 'Resolución';
     const SelectorRes = document.createElement('select');
+    SelectorRes.id = 'ExpRes';
+    SelectorRes.autofocus = true;
     RESOLUCIONES_EXPORTACION.forEach((R, I) => {
       const O = document.createElement('option');
       O.value = String(I);
       O.textContent = `${R.Etiqueta} (${R.Ancho}×${R.Alto})`;
-      if (I === 1) O.selected = true; // 1080p
+      if (I === 1) O.selected = true;
       SelectorRes.appendChild(O);
     });
-    EtiquetaRes.append(document.createTextNode('Resolución '), SelectorRes);
+    CampoRes.append(LblRes, SelectorRes);
 
-    const EtiquetaFps = document.createElement('label');
-    EtiquetaFps.className = 'EtiquetaCompacta';
-    const SelectorFps = document.createElement('select');
+    const CampoFps = document.createElement('div');
+    CampoFps.className = 'CampoDialogo';
+    const LblFps = document.createElement('label');
+    LblFps.htmlFor = 'ExpFps';
+    LblFps.textContent = 'Cuadros por segundo';
+    this.SelectorFps = document.createElement('select');
+    this.SelectorFps.id = 'ExpFps';
     for (const F of [24, 30, 60]) {
       const O = document.createElement('option');
-      O.value = String(F); O.textContent = `${F} fps`;
+      O.value = String(F);
+      O.textContent = `${F} FPS`;
       if (F === 30) O.selected = true;
-      SelectorFps.appendChild(O);
+      this.SelectorFps.appendChild(O);
     }
-    EtiquetaFps.append(document.createTextNode('Velocidad '), SelectorFps);
+    this.SelectorFps.onchange = () => this.ActualizarResumen();
+    CampoFps.append(LblFps, this.SelectorFps);
 
-    const EtiquetaFormato = document.createElement('label');
-    EtiquetaFormato.className = 'EtiquetaCompacta';
+    const CampoFormato = document.createElement('div');
+    CampoFormato.className = 'CampoDialogo';
+    const LblFmt = document.createElement('label');
+    LblFmt.htmlFor = 'ExpFmt';
+    LblFmt.textContent = 'Formato';
     const SelectorFormato = document.createElement('select');
-    for (const [Valor, Texto] of [['mp4', 'MP4 (H.264 + AAC)'], ['webm', 'WebM (respaldo, tiempo real)']]) {
+    SelectorFormato.id = 'ExpFmt';
+    for (const [Valor, Texto] of [['mp4', 'MP4 (H.264 + AAC)'], ['webm', 'WebM (VP9 respaldo)']]) {
       const O = document.createElement('option');
-      O.value = Valor; O.textContent = Texto;
+      O.value = Valor;
+      O.textContent = Texto;
       SelectorFormato.appendChild(O);
     }
-    EtiquetaFormato.append(document.createTextNode('Formato '), SelectorFormato);
+    CampoFormato.append(LblFmt, SelectorFormato);
 
-    // Casilla Audio
-    const LblAudio = document.createElement('label');
-    LblAudio.className = 'EtiquetaCompacta';
+    const CampoAudio = document.createElement('label');
+    CampoAudio.className = 'EtiquetaCompacta';
     const CasillaAudio = document.createElement('input');
     CasillaAudio.type = 'checkbox';
     CasillaAudio.checked = true;
-    LblAudio.append(CasillaAudio, document.createTextNode(' Incluir pista de audio'));
+    CampoAudio.append(CasillaAudio, document.createTextNode(' Incluir pista de audio'));
 
-    // Agrupamos configuración
-    const GrupoConfig = document.createElement('div');
-    GrupoConfig.style.display = 'grid';
-    GrupoConfig.style.gridTemplateColumns = '1fr 1fr';
-    GrupoConfig.style.gap = '12px';
-    GrupoConfig.append(EtiquetaRes, EtiquetaFps, EtiquetaFormato, LblAudio);
-    Cuerpo.appendChild(GrupoConfig);
+    const Rejilla = document.createElement('div');
+    Rejilla.className = 'RejillaDialogo';
+    Rejilla.append(CampoRes, CampoFps, CampoFormato, CampoAudio);
 
-    // Botones de acción
-    const BotonExportar = document.createElement('button');
-    BotonExportar.className = 'BotonPrimario';
-    BotonExportar.textContent = 'Renderizar y Exportar';
-    BotonExportar.style.padding = '10px';
-    BotonExportar.style.fontSize = '14px';
-
-    const BotonCancelar = document.createElement('button');
-    BotonCancelar.className = 'BotonPeligro';
-    BotonCancelar.textContent = 'Cancelar';
-    BotonCancelar.disabled = true;
-
-    const FilaBotones = document.createElement('div');
-    FilaBotones.className = 'FilaControles';
-    FilaBotones.style.marginTop = '8px';
-    FilaBotones.append(BotonExportar, BotonCancelar);
-    Cuerpo.appendChild(FilaBotones);
-
-    // Barra de progreso
     const ContenedorBarra = document.createElement('div');
     ContenedorBarra.className = 'BarraProgreso';
     this.BarraExportacion = document.createElement('div');
     ContenedorBarra.appendChild(this.BarraExportacion);
-    
+
     this.TextoExportacion = document.createElement('p');
     this.TextoExportacion.className = 'TextoTenue';
-    this.TextoExportacion.textContent = 'Listo para exportar el proyecto completo.';
-    this.TextoExportacion.style.margin = '4px 0 0 0';
-    
-    Cuerpo.append(ContenedorBarra, this.TextoExportacion);
+    this.TextoExportacion.textContent = 'Listo para renderizar el proyecto completo.';
 
-    // Lógica de exportación
+    const Pie = document.createElement('div');
+    Pie.className = 'PieDialogo';
+
+    const BotonCancelar = document.createElement('button');
+    BotonCancelar.type = 'button';
+    BotonCancelar.className = 'BotonPeligro';
+    BotonCancelar.textContent = 'Cancelar render';
+    BotonCancelar.disabled = true;
+
+    const BotonExportar = document.createElement('button');
+    BotonExportar.type = 'button';
+    BotonExportar.className = 'BotonPrimario BotonIconoTexto';
+    BotonExportar.append(CrearIcono('export'), document.createTextNode(' Renderizar y Exportar'));
+
+    Pie.append(BotonCancelar, BotonExportar);
+    Cuerpo.append(this.ResumenRender, Rejilla, ContenedorBarra, this.TextoExportacion);
+    Dialogo.append(Cabecera, Cuerpo, Pie);
+
     BotonExportar.onclick = async () => {
-      if (!Ctx.Modelos.Vrm) { Ctx.NotificarEstado('Carga primero un modelo VRM.'); return; }
-      
+      if (!Ctx.Modelos.Vrm) {
+        Ctx.NotificarEstado('Carga primero un modelo VRM.', 'aviso');
+        return;
+      }
+
       const Res = RESOLUCIONES_EXPORTACION[parseInt(SelectorRes.value, 10)];
       const Opciones: OpcionesExportacion = {
-        Ancho: Res.Ancho, Alto: Res.Alto,
-        Fps: parseInt(SelectorFps.value, 10),
+        Ancho: Res.Ancho,
+        Alto: Res.Alto,
+        Fps: parseInt(this.SelectorFps.value, 10),
         Formato: SelectorFormato.value as 'mp4' | 'webm',
         IncluirAudio: CasillaAudio.checked
       };
@@ -156,7 +198,7 @@ export class ModalExportacion {
       BotonCerrar.disabled = true;
       BotonCancelar.disabled = false;
       SelectorRes.disabled = true;
-      SelectorFps.disabled = true;
+      this.SelectorFps.disabled = true;
       SelectorFormato.disabled = true;
       CasillaAudio.disabled = true;
 
@@ -165,27 +207,24 @@ export class ModalExportacion {
           this.BarraExportacion.style.width = `${Math.round(Fraccion * 100)}%`;
           this.TextoExportacion.textContent = Mensaje;
         });
-        Ctx.NotificarEstado('Video exportado correctamente.');
+        Ctx.NotificarEstado('Video exportado correctamente.', 'exito');
         this.Cerrar();
       } catch (E) {
-        Ctx.NotificarEstado((E as Error).message);
-        this.TextoExportacion.textContent = (E as Error).message;
+        const Msg = (E as Error).message;
+        Ctx.NotificarEstado(Msg, 'error');
+        this.TextoExportacion.textContent = Msg;
       } finally {
         BotonExportar.disabled = false;
         BotonCerrar.disabled = false;
         BotonCancelar.disabled = true;
         SelectorRes.disabled = false;
-        SelectorFps.disabled = false;
+        this.SelectorFps.disabled = false;
         SelectorFormato.disabled = false;
         CasillaAudio.disabled = false;
       }
     };
 
     BotonCancelar.onclick = () => Ctx.Exportador.CancelarExportacion();
-
-    Ventana.append(Cabecera, Cuerpo);
-    ContenedorOverlay.appendChild(Ventana);
-
-    return ContenedorOverlay;
+    return Dialogo;
   }
 }
