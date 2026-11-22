@@ -38,6 +38,7 @@ export class GestorEscena {
 
   public ModeloFondo: THREE.Object3D | null = null;
   private TexturaFondo: THREE.Texture | null = null;
+  private UrlFondoBlob: string | null = null;
 
   public BloomActivo = false;
   public BloomFuerza = 0.55;
@@ -221,14 +222,29 @@ export class GestorEscena {
     }
   }
 
+  private LimpiarFondoAnterior(): void {
+    if (this.TexturaFondo) {
+      this.TexturaFondo.dispose();
+      this.TexturaFondo = null;
+    }
+    if (this.UrlFondoBlob && this.UrlFondoBlob.startsWith('blob:')) {
+      URL.revokeObjectURL(this.UrlFondoBlob);
+      this.UrlFondoBlob = null;
+    }
+  }
+
   /** Fondo con color sólido. */
   public EstablecerFondoColor(Hex: string): void {
-    this.TexturaFondo = null;
+    this.LimpiarFondoAnterior();
     this.Escena.background = new THREE.Color(Hex);
   }
 
   /** Fondo con una imagen cargada desde un archivo local. */
   public EstablecerFondoImagen(Url: string): void {
+    this.LimpiarFondoAnterior();
+    if (Url.startsWith('blob:')) {
+      this.UrlFondoBlob = Url;
+    }
     new THREE.TextureLoader().load(Url, (Textura) => {
       Textura.colorSpace = THREE.SRGBColorSpace;
       this.TexturaFondo = Textura;
@@ -247,12 +263,46 @@ export class GestorEscena {
     this.Escena.add(Objeto);
   }
 
-  /** Retira el modelo de fondo actual, si existe. */
+  /** Retira el modelo de fondo actual, liberando su geometría y materiales GPU. */
   public QuitarModeloFondo(): void {
     if (this.ModeloFondo) {
+      this.ModeloFondo.traverse((Nodo) => {
+        const Malla = Nodo as THREE.Mesh;
+        if (Malla.geometry) Malla.geometry.dispose();
+        if (Malla.material) {
+          if (Array.isArray(Malla.material)) {
+            Malla.material.forEach((Mat) => Mat.dispose());
+          } else {
+            Malla.material.dispose();
+          }
+        }
+      });
       this.Escena.remove(this.ModeloFondo);
       this.ModeloFondo = null;
     }
+  }
+
+  /** Encuadra la cámara rápidamente en una vista preestablecida del estudio. */
+  public EnfocarVistaPreajuste(Vista: 'frontal' | 'perfil' | 'tresCuartos' | 'rostro'): void {
+    switch (Vista) {
+      case 'frontal':
+        this.Camara.position.set(0, 1.35, 3.4);
+        this.Controles.target.set(0, 1.0, 0);
+        break;
+      case 'perfil':
+        this.Camara.position.set(3.2, 1.3, 0.2);
+        this.Controles.target.set(0, 1.0, 0);
+        break;
+      case 'tresCuartos':
+        this.Camara.position.set(2.1, 1.45, 2.6);
+        this.Controles.target.set(0, 1.0, 0);
+        break;
+      case 'rostro':
+        this.Camara.position.set(0, 1.48, 1.15);
+        this.Controles.target.set(0, 1.42, 0);
+        break;
+    }
+    this.Controles.update();
   }
 
   /** Activa o desactiva el efecto de brillo (bloom). */

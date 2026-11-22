@@ -28,16 +28,25 @@ function localAssetsPlugin() {
           let body = '';
           req.on('data', (chunk: any) => body += chunk.toString());
           req.on('end', () => {
-            const data = body ? JSON.parse(body) : { engine: 'mediapipe' };
+            let data: any;
+            try {
+              data = body ? JSON.parse(body) : { engine: 'mediapipe' };
+            } catch {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: 'JSON inválido' }));
+              return;
+            }
             if (pythonTrackerProcess) pythonTrackerProcess.kill();
             
             const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
               ? './tracker/python_portable/python.exe' : 'python';
 
-            console.log(`[API] Iniciando Motor Python (Live OSC) [${data.engine}]...`);
+            const engine = data.engine || 'mediapipe';
+            console.log(`[API] Iniciando Motor Python (Live OSC) [${engine}]...`);
             (global as any).trackerStatus = 'Iniciando cámara en vivo...';
             
-            pythonTrackerProcess = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', data.engine, '--live', '--osc-port', '39539'], {
+            pythonTrackerProcess = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', engine, '--live', '--osc-port', '39539'], {
                cwd: process.cwd()
             });
             
@@ -78,8 +87,16 @@ function localAssetsPlugin() {
           let body = '';
           req.on('data', (chunk: any) => body += chunk.toString());
           req.on('end', () => {
-            const data = JSON.parse(body);
-            const inputPath = path.join(process.cwd(), data.videoPath);
+            let data: any;
+            try {
+              data = JSON.parse(body);
+            } catch {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: false, error: 'JSON inválido' }));
+              return;
+            }
+            const inputPath = path.join(process.cwd(), String(data.videoPath || ''));
             const engine = data.engine || 'mediapipe';
             const outName = `track_${Date.now()}.json`;
             const outDir = path.join(process.cwd(), 'user', 'animations');
@@ -121,82 +138,6 @@ function localAssetsPlugin() {
           return;
         }
 
-        // Generar animacion mediante MDM Text-to-Motion
-        if (req.url === '/api/tracker/generate-mdm' && req.method === 'POST') {
-          let body = '';
-          req.on('data', (chunk: any) => body += chunk.toString());
-          req.on('end', () => {
-            const data = JSON.parse(body);
-            const prompt = data.prompt || 'salto';
-            const outName = `mdm_${Date.now()}.json`;
-            const outDir = path.join(process.cwd(), 'user', 'animations');
-            if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-            const outPath = path.join(outDir, outName);
-
-            const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
-              ? './tracker/python_portable/python.exe' : 'python';
-
-            console.log(`[API] Generando MDM para prompt: ${prompt}`);
-            (global as any).trackerStatus = 'Iniciando generación MDM...';
-            
-            const proc = spawn(pythonExe, ['-u', 'tracker/main.py', '--engine', 'mdm', '--prompt', prompt, '--output', outPath], { cwd: process.cwd() });
-            
-            proc.stdout.on('data', (d: any) => {
-               const msg = d.toString();
-               if (msg.includes('[PROGRESS]') || msg.includes('[STATE]')) {
-                  (global as any).trackerStatus = msg.replace('[PROGRESS]', '').replace('[STATE]', '').trim();
-               }
-               console.log(`[PyMDM]: ${msg}`);
-            });
-            proc.stderr.on('data', (d: any) => console.error(`[PyMDM ERR]: ${d.toString()}`));
-            
-            proc.on('close', (code: any) => {
-              if (code === 0 && fs.existsSync(outPath)) {
-                (global as any).trackerStatus = '¡Proceso terminado!';
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true, jsonUrl: `/user/animations/${outName}` }));
-              } else {
-                (global as any).trackerStatus = 'Error durante la generación MDM.';
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: false, error: 'Fallo en Python' }));
-              }
-            });
-          });
-          return;
-        }
-
-        // Instalar modelo real MoMask
-        if (req.url === '/api/tracker/setup-momask' && req.method === 'POST') {
-          const pythonExe = process.platform === 'win32' && fs.existsSync('./tracker/python_portable/python.exe')
-            ? './tracker/python_portable/python.exe' : 'python';
-            
-          console.log(`[API] Iniciando descarga e instalacion de MoMask...`);
-          (global as any).trackerStatus = 'Iniciando instalación de MoMask...';
-          
-          const proc = spawn(pythonExe, ['-u', 'tracker/setup_momask.py'], { cwd: process.cwd() });
-          
-          proc.stdout.on('data', (d: any) => {
-             const msg = d.toString();
-             if (msg.includes('[PROGRESS]') || msg.includes('[STATE]')) {
-                (global as any).trackerStatus = msg.replace('[PROGRESS]', '').replace('[STATE]', '').trim();
-             }
-             console.log(`[PyMoMask]: ${msg}`);
-          });
-          proc.stderr.on('data', (d: any) => console.error(`[PyMoMask ERR]: ${d.toString()}`));
-          
-          proc.on('close', (code: any) => {
-            res.setHeader('Content-Type', 'application/json');
-            if (code === 0) {
-              (global as any).trackerStatus = 'MoMask instalado exitosamente.';
-              res.end(JSON.stringify({ success: true }));
-            } else {
-              (global as any).trackerStatus = 'Error durante la instalación de MoMask.';
-              res.end(JSON.stringify({ success: false, error: 'Fallo en Python' }));
-            }
-          });
-          return;
-        }
-
         if (req.url === '/api/library' && req.method === 'GET') {
           const getFiles = (dir: string) => {
             const fullPath = path.join(process.cwd(), dir);
@@ -225,6 +166,7 @@ function localAssetsPlugin() {
         }
 
         if (req.url === '/api/upload' && req.method === 'POST') {
+          const CATEGORIAS_VALIDAS = new Set(['models', 'animations', 'poses', 'videos']);
           const form = new multiparty.Form();
           form.parse(req, (err: any, fields: any, files: any) => {
             if (err) {
@@ -233,20 +175,37 @@ function localAssetsPlugin() {
               return;
             }
 
-            const category = fields.category[0]; // 'models', 'animations', 'poses'
-            const file = files.file[0];
-            
-            const targetDir = path.join(process.cwd(), 'user', category);
-            if (!fs.existsSync(targetDir)) {
-              fs.mkdirSync(targetDir, { recursive: true });
+            const category = String(fields?.category?.[0] || '');
+            const file = files?.file?.[0];
+            if (!file) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ success: false, error: 'Archivo faltante' }));
+              return;
             }
 
-            const targetPath = path.join(targetDir, file.originalFilename);
-            fs.copyFileSync(file.path, targetPath);
-            fs.unlinkSync(file.path); // limpiar temp
+            try {
+              if (!CATEGORIAS_VALIDAS.has(category)) {
+                res.statusCode = 400;
+                res.end(JSON.stringify({ success: false, error: 'Categoría no válida' }));
+                return;
+              }
 
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ success: true, path: `/user/${category}/${file.originalFilename}` }));
+              const safeName = path.basename(String(file.originalFilename || 'archivo'));
+              const targetDir = path.join(process.cwd(), 'user', category);
+              if (!fs.existsSync(targetDir)) {
+                fs.mkdirSync(targetDir, { recursive: true });
+              }
+
+              const targetPath = path.join(targetDir, safeName);
+              fs.copyFileSync(file.path, targetPath);
+
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: true, path: `/user/${category}/${safeName}` }));
+            } finally {
+              try {
+                if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+              } catch {}
+            }
           });
           return;
         }

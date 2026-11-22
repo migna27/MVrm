@@ -390,25 +390,25 @@ def calculate_face_blendshapes(face_landmarks):
     def dist(p1, p2):
         return math.sqrt((lms[p1].x - lms[p2].x)**2 + (lms[p1].y - lms[p2].y)**2)
 
-    # Boca (Mouth Open -> 'A')
+    # Boca (Mouth Open -> 'aa' estándar VRM 1.0)
     mouth_open = dist(13, 14)
     mouth_width = dist(78, 308)
     ratio_mouth = mouth_open / (mouth_width + 1e-6)
     val_mouth = np.clip((ratio_mouth - 0.05) / 0.4, 0.0, 1.0)
-    blendshapes['A'] = float(val_mouth)
+    blendshapes['aa'] = float(val_mouth)
 
-    # Ojo Izquierdo (Blink_L)
+    # Ojo Izquierdo (blinkLeft estándar VRM 1.0)
     eye_l_open = dist(159, 145)
     eye_l_width = dist(33, 133)
     ratio_l = eye_l_open / (eye_l_width + 1e-6)
     val_blink_l = 1.0 - np.clip((ratio_l - 0.15) / 0.1, 0.0, 1.0)
-    blendshapes['Blink_L'] = float(val_blink_l)
+    blendshapes['blinkLeft'] = float(val_blink_l)
 
-    # Ojo Derecho (Blink_R)
+    # Ojo Derecho (blinkRight estándar VRM 1.0)
     eye_r_open = dist(386, 374)
     eye_r_width = dist(362, 263)
     ratio_r = eye_r_open / (eye_r_width + 1e-6)
     val_blink_r = 1.0 - np.clip((ratio_r - 0.15) / 0.1, 0.0, 1.0)
-    blendshapes['Blink_R'] = float(val_blink_r)
+    blendshapes['blinkRight'] = float(val_blink_r)
 
     return blendshapes

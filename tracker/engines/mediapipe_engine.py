@@ -67,28 +67,33 @@ def run_mediapipe_tracking(video_path, fps_target=24, live=False, osc_client=Non
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image.flags.writeable = False
                 results = holistic.process(image)
-                
-                # Para el preview
-                image.flags.writeable = True
-                image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                
-                if results.pose_landmarks:
-                    mp_drawing.draw_landmarks(image_bgr, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
-                if results.left_hand_landmarks:
-                    mp_drawing.draw_landmarks(image_bgr, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-                if results.right_hand_landmarks:
-                    mp_drawing.draw_landmarks(image_bgr, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+
+                image_bgr = None
+                if live:
+                    image.flags.writeable = True
+                    image_bgr = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+                    if results.pose_landmarks:
+                        mp_drawing.draw_landmarks(image_bgr, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+                    if results.left_hand_landmarks:
+                        mp_drawing.draw_landmarks(image_bgr, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+                    if results.right_hand_landmarks:
+                        mp_drawing.draw_landmarks(image_bgr, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
                 # Solver cinemático (cuerpo + manos) -> rotaciones LOCALES (scipy Rotation)
                 alto_img, ancho_img = image.shape[0], image.shape[1]
                 locales = resolver_frame(results.pose_world_landmarks, results.left_hand_landmarks,
                                          results.right_hand_landmarks, ancho_img, alto_img)
 
-                # Filtro temporal por hueso (rechaza inversiones palma/dorso de 1-3 frames)
+                # Filtro temporal por hueso (suavizado más estable en piernas)
+                huesos_piernas = {'leftUpperLeg', 'leftLowerLeg', 'rightUpperLeg', 'rightLowerLeg'}
                 rotaciones = {}
                 for bone, r in locales.items():
                     if bone not in filtros:
-                        filtros[bone] = FiltroRotacion()
+                        filtros[bone] = (
+                            FiltroRotacion(alpha_min=0.14, alpha_max=0.6)
+                            if bone in huesos_piernas
+                            else FiltroRotacion()
+                        )
                     rotaciones[bone] = filtros[bone].actualizar(r)
 
                 # Cara (Expresiones)

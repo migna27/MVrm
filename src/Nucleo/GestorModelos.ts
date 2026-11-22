@@ -34,11 +34,41 @@ export interface DatosReposoHueso {
   Posicion: THREE.Vector3;
 }
 
+/** Equivalencias bidireccionales entre nombres de expresiones VRM 0.x / VSeeFace / VRM 1.0. */
+const ALIAS_EXPRESIONES_VRM: Record<string, string[]> = {
+  a: ['aa'],
+  aa: ['a'],
+  i: ['ih'],
+  ih: ['i'],
+  u: ['ou'],
+  ou: ['u'],
+  e: ['ee'],
+  ee: ['e'],
+  o: ['oh'],
+  oh: ['o'],
+  blink: ['blink'],
+  blink_l: ['blinkleft'],
+  blinkleft: ['blink_l'],
+  blink_r: ['blinkright'],
+  blinkright: ['blink_r'],
+  joy: ['happy'],
+  happy: ['joy'],
+  sorrow: ['sad'],
+  sad: ['sorrow'],
+  fun: ['relaxed'],
+  relaxed: ['fun'],
+  angry: ['angry'],
+  surprised: ['surprised'],
+  neutral: ['neutral']
+};
+
 export class GestorModelos {
   public Vrm: VRM | null = null;
   public NombreModelo = '';
   public PoseReposo = new Map<string, DatosReposoHueso>();
   private Ayudante: THREE.SkeletonHelper | null = null;
+  private ColliderGeo: THREE.BufferGeometry | null = null;
+  private ColliderMat: THREE.Material | null = null;
 
   public Colliders: THREE.Mesh[] = [];
 
@@ -73,10 +103,17 @@ export class GestorModelos {
     this.ActualizarColliders();
   }
 
-  private ActualizarColliders(): void {
-    // Eliminar colliders anteriores
-    this.Colliders.forEach(C => C.parent?.remove(C));
+  private LimpiarColliders(): void {
+    this.Colliders.forEach((C) => C.parent?.remove(C));
     this.Colliders = [];
+    this.ColliderGeo?.dispose();
+    this.ColliderMat?.dispose();
+    this.ColliderGeo = null;
+    this.ColliderMat = null;
+  }
+
+  private ActualizarColliders(): void {
+    this.LimpiarColliders();
 
     if (!this.Vrm) return;
 
@@ -84,6 +121,8 @@ export class GestorModelos {
     // El material es invisible (opacity 0) pero sigue siendo clickeable por el raycaster
     const Geometria = new THREE.SphereGeometry(0.08, 8, 8);
     const Material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthTest: false });
+    this.ColliderGeo = Geometria;
+    this.ColliderMat = Material;
 
     for (const Nombre of this.ObtenerHuesosDisponibles()) {
       const Nodo = this.ObtenerNodoHueso(Nombre);
@@ -132,6 +171,7 @@ export class GestorModelos {
 
   /** Elimina el modelo VRM actual de la escena. */
   public DescartarVrm(): void {
+    this.LimpiarColliders();
     if (this.Vrm) {
       this.Escena.remove(this.Vrm.scene);
       VRMUtils.deepDispose(this.Vrm.scene);
@@ -139,8 +179,6 @@ export class GestorModelos {
     }
     this.QuitarAyudante();
     this.PoseReposo.clear();
-    this.Colliders.forEach(C => C.parent?.remove(C));
-    this.Colliders = [];
   }
 
   /** Captura la pose actual como pose de reposo de referencia. */
@@ -217,17 +255,38 @@ export class GestorModelos {
     return this.Vrm.expressionManager.expressions.map((E: any) => E.expressionName as string);
   }
 
+  /** Resuelve nombres VRM 0.x / VSeeFace / VRM 1.0 al nombre real del modelo cargado. */
+  public ResolverNombreExpresion(Nombre: string): string | null {
+    const Gestor = this.Vrm?.expressionManager;
+    if (!Gestor) return null;
+    if (Gestor.getExpression(Nombre)) return Nombre;
+
+    const Disponibles = this.ObtenerExpresiones();
+    const Minuscula = Nombre.toLowerCase();
+    const Directa = Disponibles.find((E) => E.toLowerCase() === Minuscula);
+    if (Directa) return Directa;
+
+    const Candidatos = ALIAS_EXPRESIONES_VRM[Minuscula] ?? [];
+    for (const Alias of Candidatos) {
+      const Coincidencia = Disponibles.find((E) => E.toLowerCase() === Alias);
+      if (Coincidencia) return Coincidencia;
+    }
+    return null;
+  }
+
   /** Fija el peso (0..1) de una expresión facial. */
   public EstablecerExpresion(Nombre: string, Peso: number): void {
     const Gestor = this.Vrm?.expressionManager;
-    if (Gestor && Gestor.getExpression(Nombre)) Gestor.setValue(Nombre, Peso);
+    const Resuelto = this.ResolverNombreExpresion(Nombre);
+    if (Gestor && Resuelto) Gestor.setValue(Resuelto, Peso);
   }
 
   /** Lee el peso actual de una expresión facial. */
   public ObtenerValorExpresion(Nombre: string): number {
     const Gestor = this.Vrm?.expressionManager;
-    if (!Gestor || !Gestor.getExpression(Nombre)) return 0;
-    return Gestor.getValue(Nombre) ?? 0;
+    const Resuelto = this.ResolverNombreExpresion(Nombre);
+    if (!Gestor || !Resuelto) return 0;
+    return Gestor.getValue(Resuelto) ?? 0;
   }
 
   /** Pone todas las expresiones en cero. */
@@ -248,6 +307,7 @@ export class GestorModelos {
 
   private QuitarAyudante(): void {
     if (this.Ayudante) {
+      this.Ayudante.dispose();
       this.Escena.remove(this.Ayudante);
       this.Ayudante = null;
     }

@@ -105,9 +105,15 @@ export class GestorExportacion {
       const Lienzo = Escena.ObtenerLienzo();
       for (let I = 0; I < TotalCuadros; I++) {
         if (this.Cancelado) throw new Error('Exportación cancelada por el usuario.');
+        while (Codificador.encodeQueueSize > 8 && !this.Cancelado) {
+          await new Promise((R) => setTimeout(R, 8));
+        }
+        if (this.Cancelado) throw new Error('Exportación cancelada por el usuario.');
+
         const T = I / Fps;
 
-        Contexto.Animacion.EstablecerTiempo(T);
+        // Actualizar tiempo interno directamente para evitar redibujados de la UI offline
+        Contexto.Animacion.TiempoActual = T;
         Contexto.Animacion.EvaluarEn(T);
         Contexto.Efectos.Actualizar(1 / Fps);
         Contexto.Modelos.Actualizar(1 / Fps);
@@ -139,7 +145,8 @@ export class GestorExportacion {
     } finally {
       Codificador.close();
       Escena.Redimensionar();
-      Contexto.Animacion.EstablecerTiempo(TiempoPrevio);
+      Contexto.Animacion.EstablecerTiempo(TiempoPrevio, 'usuario');
+      Contexto.Animacion.EvaluarEn(TiempoPrevio);
       if (EstabaReproduciendo) Contexto.Animacion.Reproducir();
     }
   }
@@ -156,9 +163,10 @@ export class GestorExportacion {
     const Canales = Buffer.numberOfChannels;
     const Desplazamiento = Contexto.Audio.Desplazamiento;
 
+    let ErrorAudio: unknown = null;
     const CodificadorAudio = new AudioEncoder({
       output: (Fragmento, Metadatos) => Multiplexor.addAudioChunk(Fragmento, Metadatos),
-      error: () => {}
+      error: (E) => { ErrorAudio = E; }
     });
     CodificadorAudio.configure({
       codec: 'mp4a.40.2',
@@ -191,6 +199,7 @@ export class GestorExportacion {
 
     const TamanoBloque = Frecuencia; // Bloques de un segundo
     for (let Base = InicioMuestra; Base < FinMuestra; Base += TamanoBloque) {
+      if (ErrorAudio) { CodificadorAudio.close(); throw ErrorAudio; }
       if (this.Cancelado) { CodificadorAudio.close(); return; }
       const Cantidad = Math.min(TamanoBloque, FinMuestra - Base);
       const Datos = new Float32Array(Cantidad * Canales);
@@ -210,6 +219,7 @@ export class GestorExportacion {
     }
     await CodificadorAudio.flush();
     CodificadorAudio.close();
+    if (ErrorAudio) throw ErrorAudio;
   }
 
   // --------------------------------------------------------------------------
@@ -254,26 +264,33 @@ export class GestorExportacion {
 
     const Finalizado = new Promise<void>((Resolver) => { Grabadora.onstop = () => Resolver(); });
 
-    Contexto.Animacion.EstablecerTiempo(0);
-    Contexto.Animacion.Reproducir();
-    Grabadora.start(250);
+    const EnBuclePrevio = Contexto.Animacion.EnBucle;
+    Contexto.Animacion.EnBucle = false;
+    try {
+      Contexto.Animacion.EstablecerTiempo(0, 'usuario');
+      Contexto.Animacion.Reproducir();
+      Grabadora.start(250);
 
-    // Esperar a que termine la reproducción en tiempo real
-    const InicioReloj = performance.now();
-    await new Promise<void>((Resolver) => {
-      const Vigilar = () => {
-        if (this.Cancelado || performance.now() - InicioReloj >= Duracion * 1000 + 150) { Resolver(); return; }
-        AlProgreso((performance.now() - InicioReloj) / (Duracion * 1000), 'Grabando en tiempo real (WebM)…');
-        requestAnimationFrame(Vigilar);
-      };
-      Vigilar();
-    });
-
-    Contexto.Animacion.Pausar();
-    Grabadora.stop();
-    await Finalizado;
-    ContextoAudio?.close();
-    Escena.Redimensionar();
+      // Esperar a que termine la reproducción en tiempo real
+      const InicioReloj = performance.now();
+      await new Promise<void>((Resolver) => {
+        const Vigilar = () => {
+          if (this.Cancelado || performance.now() - InicioReloj >= Duracion * 1000 + 150) { Resolver(); return; }
+          AlProgreso((performance.now() - InicioReloj) / (Duracion * 1000), 'Grabando en tiempo real (WebM)…');
+          requestAnimationFrame(Vigilar);
+        };
+        Vigilar();
+      });
+    } finally {
+      Contexto.Animacion.Pausar();
+      Contexto.Animacion.EnBucle = EnBuclePrevio;
+      if (Grabadora.state !== 'inactive') {
+        Grabadora.stop();
+        await Finalizado;
+      }
+      ContextoAudio?.close();
+      Escena.Redimensionar();
+    }
 
     if (this.Cancelado) throw new Error('Exportación cancelada por el usuario.');
     DescargarBlob(new Blob(Fragmentos, { type: 'video/webm' }), `AnimacionVRM_${Ancho}x${Alto}_${Fps}fps.webm`);

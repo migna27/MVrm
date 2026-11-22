@@ -26,7 +26,7 @@ def export_to_vrm_format(tracks_smoothed, duration, output_json):
         })
         
     out_data = {"Duracion": duration, "Pistas": pistas_finales}
-    with open(output_json, 'w') as f:
+    with open(output_json, 'w', encoding='utf-8') as f:
         json.dump(out_data, f, indent=2)
     print(f"[EXITO] Archivo guardado en: {output_json}")
 
