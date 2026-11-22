@@ -3,68 +3,156 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Animador VRM — Estudio de Animación</title>
+  <title>Animador VRM — Estudio de Animación 3D</title>
 </head>
 <body>
   <div id="Aplicacion">
-    <!-- Barra superior: identidad y acciones de proyecto -->
+    <!-- Barra superior: identidad, historial y acciones de proyecto -->
     <header id="BarraSuperior">
       <div id="IdentidadApp">
-        <span id="LogoApp">◆</span>
+        <span id="LogoApp" aria-hidden="true">◆</span>
         <h1>Animador VRM</h1>
-        <span id="EtiquetaEtapa">Estudio de animación</span>
+        <span id="EtiquetaEtapa">Estudio 3D · v1.2</span>
       </div>
-      <div id="AccionesSuperior">
-        <button id="BotonNuevoProyecto" title="Nuevo proyecto">Nuevo</button>
-        <button id="BotonAbrirProyecto" title="Abrir proyecto (.animvrm.json)">Abrir</button>
-        <button id="BotonGuardarProyecto" title="Guardar proyecto">Guardar</button>
-        <span class="SeparadorVertical"></span>
-        <label class="EtiquetaCompacta">Calidad previa
+
+      <div id="AccionesSuperior" role="toolbar" focusgroup="toolbar wrap" aria-label="Acciones generales del proyecto">
+        <div role="group" aria-label="Historial">
+          <button type="button" id="BotonDeshacer" class="BotonIconoTexto" aria-disabled="true" title="Deshacer (Ctrl+Z)">↶ Deshacer</button>
+          <button type="button" id="BotonRehacer" class="BotonIconoTexto" aria-disabled="true" title="Rehacer (Ctrl+Y)">↷ Rehacer</button>
+        </div>
+        <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+        <div role="group" aria-label="Archivo de proyecto">
+          <button type="button" id="BotonNuevoProyecto" title="Crear un proyecto nuevo">Nuevo</button>
+          <button type="button" id="BotonAbrirProyecto" title="Abrir proyecto (.animvrm.json)">Abrir</button>
+          <button type="button" id="BotonGuardarProyecto" title="Guardar proyecto completo">Guardar</button>
+        </div>
+        <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+        <label class="EtiquetaCompacta" for="SelectorCalidadPrevia">Previa
           <select id="SelectorCalidadPrevia">
-            <option value="0.5">Baja (rápida)</option>
+            <option value="0.5">Baja</option>
             <option value="0.75" selected>Media</option>
             <option value="1">Alta</option>
           </select>
         </label>
-        <span class="SeparadorVertical"></span>
-        <button id="BotonAbrirExportacion" class="BotonPrimario" style="font-weight: 600; padding: 6px 16px;">⬆ Exportar Timeline</button>
+        <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+        <button type="button" id="BotonAbrirExportacion" class="BotonPrimario BotonExportarHeader">⬆ Exportar Video</button>
       </div>
     </header>
 
-    <!-- Zona central: paneles laterales + visor 3D -->
+    <!-- Zona central: paneles con pestañas + visor 3D -->
     <div id="ZonaCentral">
-      <aside id="PanelIzquierdo" class="PanelDesplazable"></aside>
+      <aside id="PanelIzquierdo" class="PanelContenedor" aria-label="Creación y escena"></aside>
+
       <main id="ContenedorVisor">
         <div id="Visor3D"></div>
+
         <div id="SuperposicionVisor">
-          <span id="IndicadorFps">— FPS</span>
-          <span id="IndicadorEstado">Arrastra un archivo .vrm al visor para comenzar</span>
+          <div class="GrupoChipsHud">
+            <span id="IndicadorFps" class="ChipHud">— FPS</span>
+            <span id="InsigniaHueso" class="ChipHud">Hueso: —</span>
+            <span id="IndicadorAutoClave" class="ChipHud ChipRec Oculto">● AUTO-CLAVE</span>
+          </div>
+          <span id="IndicadorEstado" class="ChipHud ChipEstado">Arrastra un archivo .vrm al visor para comenzar</span>
         </div>
-        <div id="ZonaSoltar" class="Oculto"><div>Suelta el archivo para cargarlo</div></div>
+
+        <!-- Barra flotante de herramientas 3D -->
+        <div id="BarraVisor" role="toolbar" focusgroup="toolbar wrap" aria-label="Herramientas del visor 3D" aria-controls="Visor3D">
+          <div role="group" aria-label="Manipulador">
+            <button type="button" id="BotonGizmoNinguno" aria-pressed="false" title="Soltar selector (Q)">Selección Q</button>
+            <button type="button" id="BotonGizmoMover" aria-pressed="false" title="Mover hueso (W)">Mover W</button>
+            <button type="button" id="BotonGizmoRotar" aria-pressed="true" title="Rotar hueso (E)">Rotar E</button>
+            <button type="button" id="BotonGizmoEspacio" aria-pressed="false" title="Alternar espacio Local / Mundo (R)">Local R</button>
+          </div>
+          <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+          <div role="group" aria-label="Utilidades de pose">
+            <button type="button" id="BotonEsqueletoVisor" aria-pressed="false" title="Mostrar u ocultar huesos">Esqueleto</button>
+            <button type="button" id="BotonEspejarVisor" title="Espejar pose izquierda ↔ derecha">Espejar L↔R</button>
+            <button type="button" id="BotonReposoVisor" title="Restablecer a pose de reposo">Reposo</button>
+          </div>
+        </div>
+
+        <div id="ZonaSoltar" class="Oculto">
+          <div>Suelta archivos .vrm, .vrma, .bvh, .json, audio o imagen de fondo</div>
+        </div>
+        <div id="PilaNotificaciones" aria-live="off"></div>
       </main>
-      <aside id="PanelDerecho" class="PanelDesplazable"></aside>
+
+      <aside id="PanelDerecho" class="PanelContenedor" aria-label="Inspector de pose y claves"></aside>
     </div>
 
-    <!-- Zona inferior: transporte y línea de tiempo -->
+    <!-- Divisor redimensionable entre el visor y la línea de tiempo -->
+    <div id="DivisorTimeline" role="separator" aria-orientation="horizontal" aria-label="Redimensionar línea de tiempo" tabindex="0">
+      <span class="AgarraderaDivisor" aria-hidden="true"></span>
+    </div>
+
+    <!-- Zona inferior: barra de transporte y línea de tiempo -->
     <footer id="ZonaLineaTiempo">
-      <div id="ControlesTransporte">
-        <button id="BotonInicio" title="Ir al inicio">⏮</button>
-        <button id="BotonReproducir" title="Reproducir / Pausar (Espacio)">▶</button>
-        <button id="BotonDetener" title="Detener">⏹</button>
-        <label class="EtiquetaCompacta"><input type="checkbox" id="CasillaBucle" checked /> Bucle</label>
-        <span id="IndicadorTiempo">00:00.00 / 00:10.00</span>
-        <label class="EtiquetaCompacta">Duración (s) <input id="EntradaDuracion" type="number" min="1" max="600" step="0.5" value="10" /></label>
-        <button id="BotonInsertarPose" title="Insertar claves de la pose actual completa">⬦ Insertar pose</button>
-        <button id="BotonEliminarClave" title="Eliminar clave seleccionada (Supr)">🗑 Clave</button>
-        <span class="SeparadorVertical"></span>
-        <label class="EtiquetaCompacta">Zoom <input id="DeslizadorZoom" type="range" min="20" max="320" value="80" /></label>
+      <div id="ControlesTransporte" role="toolbar" focusgroup="toolbar wrap" aria-label="Controles de animación y línea de tiempo" aria-controls="LienzoLineaTiempo">
+        <div role="group" aria-label="Reproducción">
+          <button type="button" id="BotonInicio" title="Ir al inicio (Inicio)">⏮</button>
+          <button type="button" id="BotonClaveAnterior" title="Clave anterior ([ o ,)">⏴◆</button>
+          <button type="button" id="BotonReproducir" aria-pressed="false" title="Reproducir / Pausar (Espacio)">▶</button>
+          <button type="button" id="BotonDetener" title="Detener y volver a 0">⏹</button>
+          <button type="button" id="BotonClaveSiguiente" title="Clave siguiente (] o .)">◆⏵</button>
+          <button type="button" id="BotonBucle" aria-pressed="true" title="Reproducción en bucle">↻ Bucle</button>
+          <button type="button" id="BotonRangoBucle" aria-pressed="false" title="Activar bucle parcial en rango">Rango</button>
+          <select id="SelectorVelocidad" aria-label="Velocidad de reproducción" title="Velocidad de reproducción">
+            <option value="0.25">0.25×</option>
+            <option value="0.5">0.5×</option>
+            <option value="0.75">0.75×</option>
+            <option value="1" selected>1.0×</option>
+            <option value="1.25">1.25×</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2.0×</option>
+          </select>
+        </div>
+
+        <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+
+        <div role="group" aria-label="Tiempo y duración">
+          <span id="IndicadorTiempo">00:00.00 / 00:10.00</span>
+          <span id="IndicadorCuadro" class="ChipCuadro">F000</span>
+          <label class="EtiquetaCompacta" for="EntradaDuracion">Dur. (s)
+            <input id="EntradaDuracion" type="number" min="1" max="600" step="0.5" value="10" />
+          </label>
+        </div>
+
+        <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+
+        <div role="group" aria-label="Fotogramas clave">
+          <button type="button" id="BotonAutoClave" aria-pressed="false" title="Grabar claves automáticamente al posar">● Auto</button>
+          <button type="button" id="BotonInsertarPose" title="Insertar o sobrescribir pose completa (K)">◆ Insertar pose</button>
+          <button type="button" id="BotonEliminarClave" aria-disabled="true" title="Eliminar clave(s) seleccionada(s) (Supr)">🗑 Clave</button>
+          <button type="button" id="BotonImportarAnimacion" title="Importar animación (.vrma, .bvh, .glb, .json)">⬇ Importar</button>
+        </div>
+
+        <span role="separator" aria-orientation="vertical" class="SeparadorVertical"></span>
+
+        <div role="group" aria-label="Navegación y filtro">
+          <button type="button" id="BotonIman" aria-pressed="true" title="Ajuste magnético a rejilla temporal">🧲 Imán</button>
+          <select id="SelectorPasoIman" aria-label="Paso de rejilla magnética" title="Paso de imán">
+            <option value="0.0166667">1/60s</option>
+            <option value="0.0333333">1/30s</option>
+            <option value="0.0416667" selected>1/24s</option>
+            <option value="0.05">50ms</option>
+            <option value="0.1">0.1s</option>
+            <option value="0.25">0.25s</option>
+          </select>
+          <input id="FiltroPistas" type="search" placeholder="Filtrar pistas…" aria-label="Filtrar pistas del timeline" />
+          <button type="button" id="BotonAjustarVista" title="Encuadrar toda la animación (F)">⤢ Encuadrar</button>
+          <label class="EtiquetaCompacta" for="DeslizadorZoom">Zoom
+            <input id="DeslizadorZoom" type="range" min="12" max="480" value="80" />
+          </label>
+        </div>
       </div>
+
       <div id="ContenedorLineaTiempo">
         <canvas id="LienzoLineaTiempo"></canvas>
       </div>
     </footer>
   </div>
 
+  <p id="RegionAnuncios" class="visually-hidden" role="status" aria-live="polite"></p>
   <script type="module" src="/src/Principal.ts"></script>
 </body>
 </html>
