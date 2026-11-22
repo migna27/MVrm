@@ -406,7 +406,7 @@ BotonEliminarClave.onclick = () => {
 };
 
 document.getElementById('BotonImportarAnimacion')!.onclick = async () => {
-  const Archivo = await SeleccionarArchivo('.vrma,.bvh,.glb,.gltf,.json');
+  const Archivo = await SeleccionarArchivo('.vrma,.vmd,.bvh,.glb,.gltf,.json');
   if (Archivo) void ModalImp.AbrirConArchivo(Archivo);
 };
 
@@ -832,7 +832,7 @@ Linea.AlAbrirMenuContextual = (E: MouseEvent, Obj: ObjetivoContextoTimeline) => 
       Etiqueta: 'Importar animación aquí…',
       AlActivar: async () => {
         Animacion.EstablecerTiempo(Estado.AjustarTiempoConIman(Obj.Tiempo), 'usuario');
-        const Archivo = await SeleccionarArchivo('.vrma,.bvh,.glb,.gltf,.json');
+        const Archivo = await SeleccionarArchivo('.vrma,.vmd,.bvh,.glb,.gltf,.json');
         if (Archivo) void ModalImp.AbrirConArchivo(Archivo);
       }
     });
@@ -981,8 +981,8 @@ ContenedorVisor.addEventListener('drop', async (E) => {
       Bus.Emitir('modelo:cargado', { nombre: Archivo.name });
       void SubirArchivoLocal(Archivo, 'models');
       Contexto.NotificarEstado(`Modelo cargado y guardado: ${Archivo.name}`, 'exito');
-    } else if (Nombre.endsWith('.vrma') || Nombre.endsWith('.bvh')) {
-      if (Nombre.endsWith('.vrma')) void SubirArchivoLocal(Archivo, 'animations');
+    } else if (Nombre.endsWith('.vrma') || Nombre.endsWith('.vmd') || Nombre.endsWith('.bvh')) {
+      if (Nombre.endsWith('.vrma') || Nombre.endsWith('.vmd')) void SubirArchivoLocal(Archivo, 'animations');
       void ModalImp.AbrirConArchivo(Archivo);
     } else if (Nombre.endsWith('.glb') || Nombre.endsWith('.gltf')) {
       Escena.EstablecerModeloFondo(await Modelos.CargarModeloFondo(Archivo));

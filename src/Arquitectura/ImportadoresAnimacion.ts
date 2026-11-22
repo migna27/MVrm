@@ -15,6 +15,7 @@ import {
 import { NOMBRES_HUESOS, NOMBRES_HUESOS_LEGIBLES } from '../Nucleo/GestorModelos';
 import { GenerarId, LeerArchivoTexto, Limitar } from '../Utilidades';
 import { ComandoImportarAnimacion } from './ComandosAnimacion';
+import { ImportadorVmd } from './ImportadorVmd';
 
 /** Estrategia común para cualquier formato de animación importable. */
 export interface EstrategiaImportacion {
@@ -111,16 +112,25 @@ function TransformarPistasImportadas(
       : ClavesReescaladas;
 
     ClavesFinales += Finales.length;
+    const EsPorPers = P.Tipo === 'HuesoRotacion' || P.Tipo === 'HuesoPosicion' || P.Tipo === 'Expresion';
+    const DestPersId = EsPorPers
+      ? (P.PersonajeId ?? opciones.PersonajeId ?? ctx.Modelos.PersonajeActivoId ?? undefined)
+      : undefined;
+    const PersObj = DestPersId ? ctx.Modelos.ObtenerPersonaje(DestPersId) : null;
+    const PrefijoPers = PersObj && ctx.Modelos.Personajes.length > 1
+      ? `[${PersObj.Nombre.replace(/\.vrm$/i, '').slice(0, 12)}] `
+      : '';
     const NombreObjetivo = P.Tipo === 'HuesoPosicion'
       ? `Posición ${NOMBRES_HUESOS_LEGIBLES[P.Objetivo] ?? P.Objetivo}`
       : (NOMBRES_HUESOS_LEGIBLES[P.Objetivo] ?? P.Objetivo);
 
     Resultado.push({
       Id: GenerarId(),
-      Nombre: `${Prefijo} · ${NombreObjetivo}`,
+      Nombre: `${PrefijoPers}${Prefijo} · ${NombreObjetivo}`,
       Tipo: P.Tipo,
       Objetivo: P.Objetivo,
       Grupo: opciones.GrupoDestino,
+      ...(DestPersId ? { PersonajeId: DestPersId } : {}),
       Claves: Finales
     });
   }
@@ -165,14 +175,15 @@ class ImportadorVrma implements EstrategiaImportacion {
     return archivo.name.toLowerCase().endsWith('.vrma');
   }
 
-  private async ObtenerClip(archivo: File, ctx: ContextoAplicacion): Promise<THREE.AnimationClip> {
-    if (!ctx.Modelos.Vrm) {
+  private async ObtenerClip(archivo: File, ctx: ContextoAplicacion, personajeId?: string): Promise<THREE.AnimationClip> {
+    const Pers = ctx.Modelos.ObtenerPersonaje(personajeId);
+    if (!Pers) {
       throw new Error('Carga primero un modelo VRM antes de importar un archivo .vrma.');
     }
     const Cache = ObtenerEntradaCache(archivo);
-    if (!Cache.clip || Cache.vrmRef !== ctx.Modelos.Vrm) {
-      Cache.clip = await ctx.Modelos.CargarAnimacionVrma(archivo);
-      Cache.vrmRef = ctx.Modelos.Vrm;
+    if (!Cache.clip || Cache.vrmRef !== Pers.Vrm) {
+      Cache.clip = await ctx.Modelos.CargarAnimacionVrma(archivo, Pers.Id);
+      Cache.vrmRef = Pers.Vrm;
     }
     return Cache.clip;
   }
@@ -194,12 +205,13 @@ class ImportadorVrma implements EstrategiaImportacion {
     opciones: OpcionesImportacionAnimacion,
     ctx: ContextoAplicacion
   ): Promise<ResultadoImportacion> {
-    const Clip = await this.ObtenerClip(archivo, ctx);
+    const Clip = await this.ObtenerClip(archivo, ctx, opciones.PersonajeId);
     const PistasHorneadas = ctx.Animacion.HornearClip(
       Clip,
       opciones.FpsMuestreo,
       opciones.GrupoDestino,
-      false
+      false,
+      opciones.PersonajeId
     );
     const Res = TransformarPistasImportadas(PistasHorneadas, opciones, ctx, false);
     return {
@@ -507,6 +519,7 @@ class ImportadorGltfAnimacion implements EstrategiaImportacion {
 export class ServicioImportacion {
   private readonly Estrategias: EstrategiaImportacion[] = [
     new ImportadorVrma(),
+    new ImportadorVmd(),
     new ImportadorJson(),
     new ImportadorBvh(),
     new ImportadorGltfAnimacion()

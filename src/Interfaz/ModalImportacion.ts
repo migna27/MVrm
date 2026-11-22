@@ -23,6 +23,14 @@ export class ModalImportacion {
   private CheckSimplificar!: HTMLInputElement;
   private InputTolerancia!: HTMLInputElement;
   private OutTolerancia!: HTMLOutputElement;
+  private SelectorPersonaje!: HTMLSelectElement;
+  private CampoPersonaje!: HTMLElement;
+  private BloqueVmd!: HTMLElement;
+  private CheckVmdRetarget!: HTMLInputElement;
+  private CheckVmdTwist!: HTMLInputElement;
+  private CheckVmdFootIk!: HTMLInputElement;
+  private CheckVmdCamara!: HTMLInputElement;
+  private CheckVmdLuz!: HTMLInputElement;
   private BotonConfirmar!: HTMLButtonElement;
   private BotonCargarEjemplo!: HTMLButtonElement;
 
@@ -43,6 +51,21 @@ export class ModalImportacion {
     this.InputTiempoInicio.disabled = true;
     this.BotonConfirmar.disabled = true;
     this.BotonCargarEjemplo.classList.add('Oculto');
+
+    const EsVmd = archivo.name.toLowerCase().endsWith('.vmd');
+    this.BloqueVmd.classList.toggle('Oculto', !EsVmd);
+
+    this.SelectorPersonaje.innerHTML = '';
+    const ListaPers = this.Contexto.Modelos.Personajes;
+    this.CampoPersonaje.classList.toggle('Oculto', ListaPers.length === 0);
+    for (let I = 0; I < ListaPers.length; I++) {
+      const P = ListaPers[I];
+      const O = document.createElement('option');
+      O.value = P.Id;
+      O.textContent = `${I + 1}. ${P.Nombre.replace(/\.vrm$/i, '')}`;
+      if (P.Id === this.Contexto.Modelos.PersonajeActivoId) O.selected = true;
+      this.SelectorPersonaje.appendChild(O);
+    }
 
     if (!this.Dialogo.open) this.Dialogo.showModal();
 
@@ -243,6 +266,41 @@ export class ModalImportacion {
     Rejilla.append(CampoAncla, CampoTiempo, CampoModo, CampoGrupo, CampoVel, CampoFps);
     Cuerpo.appendChild(Rejilla);
 
+    // Selector de personaje destino (Multi-VRM)
+    this.CampoPersonaje = document.createElement('div');
+    this.CampoPersonaje.className = 'CampoDialogo Oculto';
+    const LblPers = document.createElement('label');
+    LblPers.htmlFor = 'ImpPersonaje';
+    LblPers.textContent = 'Personaje destino (Multi-VRM)';
+    this.SelectorPersonaje = document.createElement('select');
+    this.SelectorPersonaje.id = 'ImpPersonaje';
+    this.CampoPersonaje.append(LblPers, this.SelectorPersonaje);
+    Cuerpo.appendChild(this.CampoPersonaje);
+
+    // Bloque específico para archivos VMD (MMD)
+    this.BloqueVmd = document.createElement('div');
+    this.BloqueVmd.className = 'BloqueSimplificacion Oculto';
+    const TitVmd = document.createElement('div');
+    TitVmd.className = 'EtiquetaCompacta';
+    TitVmd.textContent = 'Motor VMD (MMD) directo sin herramientas externas:';
+    const CrearCheckVmd = (texto: string, defecto = true): HTMLInputElement => {
+      const L = document.createElement('label');
+      L.className = 'EtiquetaCompacta';
+      const Chk = document.createElement('input');
+      Chk.type = 'checkbox';
+      Chk.checked = defecto;
+      L.append(Chk, document.createTextNode(' ' + texto));
+      this.BloqueVmd.appendChild(L);
+      return Chk;
+    };
+    this.BloqueVmd.appendChild(TitVmd);
+    this.CheckVmdRetarget = CrearCheckVmd('Auto-Retarget A-Pose (PMX) → T-Pose (VRM)', true);
+    this.CheckVmdTwist = CrearCheckVmd('Integrar huesos twist y semi-estándar (腕捩/手捩/下半身)', true);
+    this.CheckVmdFootIk = CrearCheckVmd('Resolver Two-Bone Foot IK en piernas', true);
+    this.CheckVmdCamara = CrearCheckVmd('Incluir pista de Cámara MMD (si existe)', true);
+    this.CheckVmdLuz = CrearCheckVmd('Incluir pista de Luz MMD (si existe)', true);
+    Cuerpo.appendChild(this.BloqueVmd);
+
     // 5. Simplificación automática RDP
     const BloqueSimp = document.createElement('div');
     BloqueSimp.className = 'BloqueSimplificacion';
@@ -305,6 +363,7 @@ export class ModalImportacion {
         ? 0
         : Math.max(0, parseFloat(this.InputTiempoInicio.value) || 0);
 
+    const PersElegido = this.SelectorPersonaje?.value || this.Contexto.Modelos.PersonajeActivoId || undefined;
     const Opciones: OpcionesImportacionAnimacion = {
       TiempoInicio,
       Modo: this.SelectorModo.value as OpcionesImportacionAnimacion['Modo'],
@@ -312,7 +371,13 @@ export class ModalImportacion {
       FpsMuestreo: parseInt(this.SelectorFps.value, 10) || 24,
       Simplificar: this.CheckSimplificar.checked,
       ToleranciaSimplificacion: parseFloat(this.InputTolerancia.value) || 0.015,
-      GrupoDestino: this.SelectorGrupo.value as GrupoPista
+      GrupoDestino: this.SelectorGrupo.value as GrupoPista,
+      PersonajeId: PersElegido,
+      AutoRetargetAPose: this.CheckVmdRetarget?.checked ?? true,
+      IntegrarTwist: this.CheckVmdTwist?.checked ?? true,
+      UsarFootIK: this.CheckVmdFootIk?.checked ?? true,
+      IncluirCamaraVmd: this.CheckVmdCamara?.checked ?? true,
+      IncluirLucesVmd: this.CheckVmdLuz?.checked ?? true
     };
 
     this.BotonConfirmar.disabled = true;

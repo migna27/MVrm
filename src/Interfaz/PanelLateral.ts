@@ -908,7 +908,12 @@ export class PanelLateral {
             Ctx.NotificarEstado('Carga primero un modelo VRM.', 'aviso');
             return;
           }
-          const Pistas = Pre.Generar(Ctx.Animacion.TiempoActual);
+          const PersId = Ctx.Modelos.PersonajeActivoId ?? undefined;
+          const Pistas = Pre.Generar(Ctx.Animacion.TiempoActual).map((P) => (
+            (P.Tipo === 'HuesoRotacion' || P.Tipo === 'HuesoPosicion' || P.Tipo === 'Expresion') && PersId
+              ? { ...P, PersonajeId: PersId }
+              : P
+          ));
           const Cmd = new ComandoImportarAnimacion(
             Ctx.Animacion,
             Pistas,
@@ -919,7 +924,8 @@ export class PanelLateral {
               FpsMuestreo: 24,
               Simplificar: false,
               ToleranciaSimplificacion: 0.015,
-              GrupoDestino: 'Preajuste'
+              GrupoDestino: 'Preajuste',
+              PersonajeId: PersId
             },
             Pre.Duracion,
             Pre.Nombre
@@ -960,8 +966,8 @@ export class PanelLateral {
     const FilaImp = document.createElement('div');
     FilaImp.className = 'FilaControles';
 
-    const BtnImportar = this.Boton('⬇ Importar (.vrma/.bvh/.glb/.json)…', async () => {
-      const Archivo = await SeleccionarArchivo('.vrma,.bvh,.glb,.gltf,.json');
+    const BtnImportar = this.Boton('⬇ Importar (.vrma/.vmd/.bvh/.glb/.json)…', async () => {
+      const Archivo = await SeleccionarArchivo('.vrma,.vmd,.bvh,.glb,.gltf,.json');
       if (!Archivo) return;
       if (this.AlSolicitarImportacion) {
         this.AlSolicitarImportacion(Archivo);
@@ -1024,7 +1030,7 @@ export class PanelLateral {
         } catch (E) { Ctx.NotificarEstado(`Error: ${(E as Error).message}`, 'error'); }
       });
 
-      CrearLista('Animaciones (.vrma)', Libreria.animations, async (Ruta, Nombre) => {
+      CrearLista('Animaciones (.vrma / .vmd)', Libreria.animations, async (Ruta, Nombre) => {
         try {
           const ResUrl = await fetch(Ruta);
           const Archivo = new File([await ResUrl.blob()], Nombre);
