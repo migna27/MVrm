@@ -12,8 +12,14 @@ import type { GestorEfectos } from './Nucleo/GestorEfectos';
 import type { GestorTracking } from './Nucleo/GestorTracking';
 import type { GestorExportacion } from './Nucleo/GestorExportacion';
 import type { GestorVMC } from './Nucleo/GestorVMC';
+import type { BusEventos } from './Arquitectura/BusEventos';
+import type { HistorialComandos } from './Arquitectura/HistorialComandos';
+import type { EstadoEstudio } from './Arquitectura/EstadoEstudio';
 
 export interface ContextoAplicacion {
+  Bus: BusEventos;
+  Historial: HistorialComandos;
+  Estado: EstadoEstudio;
   Escena: GestorEscena;
   Modelos: GestorModelos;
   Animacion: GestorAnimacion;
@@ -22,9 +28,10 @@ export interface ContextoAplicacion {
   Tracking: GestorTracking;
   Exportador: GestorExportacion;
   VMC: GestorVMC;
+  Importador?: any;
 
   /** Muestra un mensaje en la barra de estado del visor. */
-  NotificarEstado(Mensaje: string): void;
+  NotificarEstado(Mensaje: string, Tipo?: 'info' | 'exito' | 'aviso' | 'error', PermitirDeshacer?: boolean): void;
   /** Solicita redibujar la línea de tiempo. */
   RefrescarLineaTiempo(): void;
   /** Solicita reconstruir las partes dinámicas del panel lateral. */

@@ -9,12 +9,15 @@ export type TipoObjetivoPista = 'HuesoRotacion' | 'HuesoPosicion' | 'Expresion' 
 /** Origen de una pista; define el color y la prioridad de aplicación. */
 export type GrupoPista = 'Manual' | 'Preajuste' | 'Importado' | 'SeguimientoCuerpo' | 'SeguimientoRostro' | 'GrabacionVMC';
 
+/** Estrategia de interpolación aplicable al segmento que sale de una clave. */
+export type TipoInterpolacion = 'Suave' | 'Lineal' | 'EntradaSuave' | 'SalidaSuave' | 'Escalon';
 
 /** Clave (fotograma clave) individual dentro de una pista. */
 export interface ClaveAnimacion {
   Id: string;
   Tiempo: number;    // Segundos dentro de la línea de tiempo
   Valor: number[];   // Euler XYZ (radianes), posición XYZ o [peso 0..1] según la pista
+  Interpolacion?: TipoInterpolacion; // Opcional por compatibilidad; por defecto 'Suave'
 }
 
 /** Pista de animación: secuencia ordenada de claves sobre un objetivo. */
@@ -25,6 +28,51 @@ export interface PistaAnimacion {
   Objetivo: string;        // Nombre del hueso humanoide (p. ej. "leftUpperArm") o de la expresión
   Grupo: GrupoPista;
   Claves: ClaveAnimacion[];
+  Silenciada?: boolean;
+  Bloqueada?: boolean;
+}
+
+/** Referencia a una clave seleccionada en la línea de tiempo. */
+export interface SeleccionClave {
+  PistaId: string;
+  ClaveId: string;
+}
+
+/** Rango parcial de bucle dentro de la línea de tiempo. */
+export interface RangoBucle {
+  Activo: boolean;
+  Inicio: number;
+  Fin: number;
+}
+
+/** Opciones configurables al importar una animación hacia el timeline. */
+export interface OpcionesImportacionAnimacion {
+  TiempoInicio: number;
+  Modo: 'Combinar' | 'SobrescribirRango' | 'ReemplazarGrupo';
+  EscalaTiempo: number;
+  FpsMuestreo: number;
+  Simplificar: boolean;
+  ToleranciaSimplificacion: number;
+  GrupoDestino: GrupoPista;
+}
+
+/** Resultado completo producido por un importador de animaciones. */
+export interface ResultadoImportacion {
+  Nombre: string;
+  Formato: string;
+  Pistas: PistaAnimacion[];
+  DuracionClip: number;
+  ClavesOriginales: number;
+  ClavesFinales: number;
+}
+
+/** Resumen previo de un archivo de animación antes de insertarlo en el timeline. */
+export interface VistaPreviaImportacion {
+  Nombre: string;
+  Formato: string;
+  Duracion: number;
+  TotalPistas: number;
+  TotalClavesEstimado: number;
 }
 
 /** Opciones del seguimiento de movimiento a partir de video. */
@@ -80,10 +128,10 @@ export const PRIORIDAD_GRUPOS: GrupoPista[] = [
 
 /** Colores de identificación por grupo para la línea de tiempo. */
 export const COLORES_GRUPO: Record<GrupoPista, string> = {
-  Manual: '#6cc8ff',
-  Preajuste: '#8be28b',
-  Importado: '#c9a7ff',
+  Manual: '#4cc9ff',
+  Preajuste: '#4ade80',
+  Importado: '#b692ff',
   SeguimientoCuerpo: '#ffb35c',
   SeguimientoRostro: '#ff7fb1',
-  GrabacionVMC: '#ff4d4d'
+  GrabacionVMC: '#fb5a6d'
 };
