@@ -148,13 +148,14 @@ export class GestorVMC {
 
   private ProcesarMensajeOSC(msg: any[]): void {
     const Direccion = msg[0] as string;
-    const Vrm = this.Contexto.Modelos.Vrm;
-    if (!Vrm) return;
+    const Pers = this.Contexto.Modelos.ObtenerPersonaje();
+    if (!Pers) return;
+    const Vrm = Pers.Vrm;
 
     if (Direccion === '/VMC/Ext/Bone/Pos') {
       const name = msg[1] as VRMHumanBoneName;
       const qx = msg[5], qy = msg[6], qz = msg[7], qw = msg[8];
-      const node = Vrm.humanoid?.getNormalizedBoneNode(name);
+      const node = this.Contexto.Modelos.ObtenerNodoHueso(name, Pers.Id);
       if (node) {
         // Asume cuaterniones de Unity, GestorVMC los convierte a ThreeJS (-x, -y, z, w)
         this._Quat.set(-qx, -qy, qz, qw);
@@ -162,21 +163,21 @@ export class GestorVMC {
 
         if (this.Grabando) {
           this._Euler.setFromQuaternion(node.quaternion, 'XYZ');
-          this.GrabarClaveHueso(name, [this._Euler.x, this._Euler.y, this._Euler.z]);
+          this.GrabarClaveHueso(name, [this._Euler.x, this._Euler.y, this._Euler.z], Pers.Id);
         }
       }
     } else if (Direccion === '/VMC/Ext/Root/Pos') {
       const px = msg[2], py = msg[3], pz = msg[4];
-      const node = Vrm.humanoid?.getNormalizedBoneNode('hips');
+      const node = this.Contexto.Modelos.ObtenerNodoHueso('hips', Pers.Id);
       if (node) {
         node.position.set(-px, py, -pz);
 
         if (this.Grabando) {
-          const IdPos = 'VMC_Pos_hips';
+          const IdPos = `VMC_Pos_hips_${Pers.Id}`;
           if (!this.PistasGrabacion[IdPos]) {
             this.PistasGrabacion[IdPos] = {
               Id: GenerarId(), Nombre: 'VMC · Posición cadera', Tipo: 'HuesoPosicion',
-              Objetivo: 'hips', Grupo: 'GrabacionVMC', Claves: []
+              Objetivo: 'hips', Grupo: 'GrabacionVMC', PersonajeId: Pers.Id, Claves: []
             };
           }
           const Pista = this.PistasGrabacion[IdPos];
@@ -195,22 +196,22 @@ export class GestorVMC {
       const BlendName = msg[1] as string;
       const Value = msg[2] as number;
 
-      this.Contexto.Modelos.EstablecerExpresion(BlendName, Value);
+      this.Contexto.Modelos.EstablecerExpresion(BlendName, Value, Pers.Id);
       if (this.Grabando) {
-        const ObjetivoResuelto = this.Contexto.Modelos.ResolverNombreExpresion(BlendName) ?? BlendName;
-        this.GrabarClaveExpresion(ObjetivoResuelto, Value);
+        const ObjetivoResuelto = this.Contexto.Modelos.ResolverNombreExpresion(BlendName, Pers.Id) ?? BlendName;
+        this.GrabarClaveExpresion(ObjetivoResuelto, Value, Pers.Id);
       }
     } else if (Direccion === '/VMC/Ext/Blend/Apply') {
       Vrm.expressionManager?.update();
     }
   }
 
-  private GrabarClaveHueso(Hueso: string, Valores: number[]): void {
-    const Id = `VMC_Bone_${Hueso}`;
+  private GrabarClaveHueso(Hueso: string, Valores: number[], PersonajeId: string): void {
+    const Id = `VMC_Bone_${Hueso}_${PersonajeId}`;
     if (!this.PistasGrabacion[Id]) {
       this.PistasGrabacion[Id] = {
         Id: GenerarId(), Nombre: `VMC · ${Hueso}`, Tipo: 'HuesoRotacion',
-        Objetivo: Hueso, Grupo: 'GrabacionVMC', Claves: []
+        Objetivo: Hueso, Grupo: 'GrabacionVMC', PersonajeId, Claves: []
       };
     }
     const Pista = this.PistasGrabacion[Id];
@@ -221,12 +222,12 @@ export class GestorVMC {
     }
   }
 
-  private GrabarClaveExpresion(Expresion: string, Valor: number): void {
-    const Id = `VMC_Exp_${Expresion}`;
+  private GrabarClaveExpresion(Expresion: string, Valor: number, PersonajeId: string): void {
+    const Id = `VMC_Exp_${Expresion}_${PersonajeId}`;
     if (!this.PistasGrabacion[Id]) {
       this.PistasGrabacion[Id] = {
         Id: GenerarId(), Nombre: `VMC · ${Expresion}`, Tipo: 'Expresion',
-        Objetivo: Expresion, Grupo: 'GrabacionVMC', Claves: []
+        Objetivo: Expresion, Grupo: 'GrabacionVMC', PersonajeId, Claves: []
       };
     }
     const Pista = this.PistasGrabacion[Id];

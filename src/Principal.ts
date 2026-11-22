@@ -148,6 +148,7 @@ document.getElementById('BotonBienvenidaCargar')!.onclick = async () => {
     Escena.ControlTransformacion.detach();
     await Modelos.CargarVrm(Archivo);
     Panel.RefrescarDinamico();
+    Bus.Emitir('personajes:cambiados', { cantidad: Modelos.Personajes.length, activoId: Modelos.PersonajeActivoId });
     Bus.Emitir('modelo:cargado', { nombre: Archivo.name });
     void SubirArchivoLocal(Archivo, 'models');
     Contexto.NotificarEstado(`Modelo listo: ${Archivo.name}`, 'exito');
@@ -167,6 +168,7 @@ BotonBienvenidaEjemplo.onclick = async () => {
       'https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/three-vrm-girl.vrm'
     );
     Panel.RefrescarDinamico();
+    Bus.Emitir('personajes:cambiados', { cantidad: Modelos.Personajes.length, activoId: Modelos.PersonajeActivoId });
     Bus.Emitir('modelo:cargado', { nombre: Modelos.NombreModelo });
     Contexto.NotificarEstado('Modelo de ejemplo listo para animar.', 'exito');
   } catch (E) {
@@ -326,7 +328,10 @@ function EjecutarPoseCompleta(): void {
     Contexto.NotificarEstado('Carga primero un modelo VRM.', 'aviso');
     return;
   }
-  const Cmd = new ComandoInsertarPose(Animacion, Animacion.TiempoActual, Estado.InterpolacionPorDefecto);
+  const Cmd = new ComandoInsertarPose(
+    Animacion, Animacion.TiempoActual, Estado.InterpolacionPorDefecto,
+    Modelos.PersonajeActivoId ?? undefined
+  );
   Historial.Ejecutar(Cmd);
   Contexto.NotificarEstado(
     `Pose guardada en ${FormatearTiempo(Animacion.TiempoActual)} (${Cmd.Insertadas} nueva(s), ${Cmd.Sobrescritas} sobrescrita(s)).`,
@@ -463,6 +468,22 @@ document.getElementById('BotonCamTresCuartos')!.onclick = () => Escena.EnfocarVi
 document.getElementById('BotonCamPerfil')!.onclick = () => Escena.EnfocarVistaPreajuste('perfil');
 document.getElementById('BotonCamRostro')!.onclick = () => Escena.EnfocarVistaPreajuste('rostro');
 
+const BotonModoCine = document.getElementById('BotonModoCine') as HTMLButtonElement;
+const BotonSalirCine = document.getElementById('BotonSalirCine') as HTMLButtonElement;
+
+function AlternarModoCine(Forzar?: boolean): void {
+  const Activo = Forzar ?? !AplicacionElem.classList.contains('ModoCine');
+  AplicacionElem.classList.toggle('ModoCine', Activo);
+  BotonModoCine.setAttribute('aria-pressed', String(Activo));
+  BotonSalirCine.classList.toggle('Oculto', !Activo);
+  Bus.Emitir('modoCine:cambiado', { activo: Activo });
+  Escena.Redimensionar();
+  if (!Activo) Linea.SolicitarDibujo();
+}
+
+BotonModoCine.onclick = () => AlternarModoCine();
+BotonSalirCine.onclick = () => AlternarModoCine(false);
+
 // ----------------------------------------------------------------------------
 // Divisor redimensionable del timeline (ratón + teclado)
 // ----------------------------------------------------------------------------
@@ -546,7 +567,15 @@ document.getElementById('Visor3D')!.addEventListener('mousedown', (E) => {
   const Intersecciones = Raycaster.intersectObjects(Modelos.Colliders);
   if (Intersecciones.length > 0) {
     const NombreHueso = Intersecciones[0].object.userData.boneName as string;
-    const NodoHueso = Modelos.ObtenerNodoHueso(NombreHueso);
+    const CharId = Intersecciones[0].object.userData.characterId as string | undefined;
+    if (CharId && CharId !== Modelos.PersonajeActivoId) {
+      Modelos.SeleccionarPersonaje(CharId);
+      Bus.Emitir('personajes:cambiados', {
+        cantidad: Modelos.Personajes.length,
+        activoId: CharId
+      });
+    }
+    const NodoHueso = Modelos.ObtenerNodoHueso(NombreHueso, CharId);
     if (NodoHueso) {
       Escena.ControlTransformacion.attach(NodoHueso);
       Panel.SeleccionarHueso(NombreHueso);
@@ -566,17 +595,19 @@ Escena.ControlTransformacion.addEventListener('dragging-changed', (E) => {
   if (E.value) return; // Solo grabamos al finalizar el arrastre del gizmo
   if (!Estado.AutoClave || !Modelos.Vrm || !Escena.ControlTransformacion.object) return;
   const Obj = Escena.ControlTransformacion.object;
-  const Nombre = Modelos.ObtenerHuesosDisponibles().find((N) => Modelos.ObtenerNodoHueso(N) === Obj);
+  const PersId = Modelos.PersonajeActivoId ?? undefined;
+  const Nombre = Modelos.ObtenerHuesosDisponibles(PersId).find((N) => Modelos.ObtenerNodoHueso(N, PersId) === Obj);
   if (!Nombre) return;
 
   const EsTraslacion = Escena.ControlTransformacion.mode === 'translate' && Nombre === 'hips';
   const Tipo = EsTraslacion ? 'HuesoPosicion' : 'HuesoRotacion';
-  const Valor = Animacion.ObtenerValorActualObjetivo(Tipo, Nombre);
+  const Valor = Animacion.ObtenerValorActualObjetivo(Tipo, Nombre, PersId);
   if (!Valor) return;
 
   const Cmd = new ComandoGuardarClave(
     Animacion, Tipo, Nombre, 'Manual',
-    Animacion.TiempoActual, Valor, Estado.InterpolacionPorDefecto
+    Animacion.TiempoActual, Valor, Estado.InterpolacionPorDefecto,
+    undefined, PersId
   );
   Historial.Ejecutar(Cmd);
 });
@@ -946,6 +977,7 @@ ContenedorVisor.addEventListener('drop', async (E) => {
       Escena.ControlTransformacion.detach();
       await Modelos.CargarVrm(Archivo);
       Panel.RefrescarDinamico();
+      Bus.Emitir('personajes:cambiados', { cantidad: Modelos.Personajes.length, activoId: Modelos.PersonajeActivoId });
       Bus.Emitir('modelo:cargado', { nombre: Archivo.name });
       void SubirArchivoLocal(Archivo, 'models');
       Contexto.NotificarEstado(`Modelo cargado y guardado: ${Archivo.name}`, 'exito');
@@ -1011,6 +1043,12 @@ window.addEventListener('keydown', (E) => {
   const Ctrl = E.ctrlKey || E.metaKey;
   const Tecla = E.key.toLowerCase();
 
+  if (E.key === 'Escape' && AplicacionElem.classList.contains('ModoCine')) {
+    E.preventDefault();
+    AlternarModoCine(false);
+    return;
+  }
+
   if (Ctrl && Tecla === 's') {
     E.preventDefault();
     document.getElementById('BotonGuardarProyecto')!.click();
@@ -1048,11 +1086,13 @@ window.addEventListener('keydown', (E) => {
     Linea.EliminarSeleccion();
   } else if (Tecla === 'k' && E.shiftKey) {
     if (!Modelos.Vrm || !Estado.HuesoSeleccionado) return;
-    const Val = Animacion.ObtenerValorActualObjetivo('HuesoRotacion', Estado.HuesoSeleccionado);
+    const PersId = Modelos.PersonajeActivoId ?? undefined;
+    const Val = Animacion.ObtenerValorActualObjetivo('HuesoRotacion', Estado.HuesoSeleccionado, PersId);
     if (Val) {
       const Cmd = new ComandoGuardarClave(
         Animacion, 'HuesoRotacion', Estado.HuesoSeleccionado, 'Manual',
-        Animacion.TiempoActual, Val, Estado.InterpolacionPorDefecto
+        Animacion.TiempoActual, Val, Estado.InterpolacionPorDefecto,
+        undefined, PersId
       );
       Historial.Ejecutar(Cmd);
       Contexto.NotificarEstado(`Clave guardada para ${Estado.HuesoSeleccionado}.`, 'exito', true);
@@ -1075,6 +1115,9 @@ window.addEventListener('keydown', (E) => {
     IrAClave('anterior');
   } else if (E.key === ']' || E.key === '.') {
     IrAClave('siguiente');
+  } else if (Tecla === 'f' && E.shiftKey && !Ctrl) {
+    E.preventDefault();
+    AlternarModoCine();
   } else if (Tecla === 'f' && !Ctrl) {
     Linea.AjustarVista();
   } else if (Tecla === 'q') {
@@ -1126,6 +1169,7 @@ function Bucle(Ahora: number): void {
 
   Efectos.Actualizar(Delta);
   Modelos.Actualizar(Delta);
+  Escena.ActualizarCamaraDinamica(Delta, Modelos);
   Escena.Renderizar();
 
   Cuadros++;

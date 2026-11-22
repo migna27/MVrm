@@ -340,6 +340,7 @@ export class LineaTiempo {
       Tipo: Pista.Tipo,
       Objetivo: Pista.Objetivo,
       Grupo: Pista.Grupo,
+      PersonajeId: Pista.PersonajeId,
       DeltaTiempo: Clave.Tiempo - MinT,
       Valor: [...Clave.Valor],
       Interpolacion: Clave.Interpolacion ?? 'Suave'
@@ -523,7 +524,7 @@ export class LineaTiempo {
       const Tiempo = this.Contexto.Estado
         ? this.Contexto.Estado.AjustarTiempoConIman(this.PixelesATiempo(X), E.shiftKey)
         : Limitar(this.PixelesATiempo(X), 0, this.Contexto.Animacion.Duracion);
-      const Valor = this.Contexto.Animacion.ObtenerValorActualObjetivo(Pista.Tipo, Pista.Objetivo);
+      const Valor = this.Contexto.Animacion.ObtenerValorActualObjetivo(Pista.Tipo, Pista.Objetivo, Pista.PersonajeId);
       if (!Valor) return;
 
       const Interp = this.Contexto.Estado?.InterpolacionPorDefecto ?? 'Suave';
@@ -534,7 +535,9 @@ export class LineaTiempo {
         Pista.Grupo,
         Tiempo,
         Valor,
-        Interp
+        Interp,
+        undefined,
+        Pista.PersonajeId
       );
       if (this.Contexto.Historial) this.Contexto.Historial.Ejecutar(Cmd);
       else Cmd.Ejecutar();
@@ -835,7 +838,7 @@ export class LineaTiempo {
           this.Contexto.NotificarEstado(`La pista "${Pista.Nombre}" está bloqueada.`, 'aviso');
           return;
         }
-        const Valor = Anim.ObtenerValorActualObjetivo(Pista.Tipo, Pista.Objetivo);
+        const Valor = Anim.ObtenerValorActualObjetivo(Pista.Tipo, Pista.Objetivo, Pista.PersonajeId);
         if (!Valor) return;
         const Cmd = new ComandoGuardarClave(
           Anim,
@@ -844,7 +847,9 @@ export class LineaTiempo {
           Pista.Grupo,
           Anim.TiempoActual,
           Valor,
-          Estado?.InterpolacionPorDefecto ?? 'Suave'
+          Estado?.InterpolacionPorDefecto ?? 'Suave',
+          undefined,
+          Pista.PersonajeId
         );
         if (this.Contexto.Historial) this.Contexto.Historial.Ejecutar(Cmd);
         else Cmd.Ejecutar();

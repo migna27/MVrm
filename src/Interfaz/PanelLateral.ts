@@ -55,6 +55,7 @@ export class PanelLateral {
   private DeslizadoresGlobales: Array<{ Entrada: HTMLInputElement; Salida: HTMLOutputElement; Formato: (V: number) => string }> = [];
   private SincronizadoresEscena: Array<() => void> = [];
   private ContenedorBiblioteca: HTMLElement | null = null;
+  private ListaPersonajesContenedor?: HTMLElement;
   private ArchivoVideo: File | null = null;
   private Desuscripciones: (() => void)[] = [];
 
@@ -101,7 +102,11 @@ export class PanelLateral {
         this.ActualizarIndicadoresClave();
       }),
       Bus.Suscribir('modelo:cargado', () => {
-        this.ReiniciarDeslizadoresGlobales();
+        this.SincronizarDeslizadoresGlobalesDesdePersonaje();
+        this.RefrescarDinamico();
+      }),
+      Bus.Suscribir('personajes:cambiados', () => {
+        this.SincronizarDeslizadoresGlobalesDesdePersonaje();
         this.RefrescarDinamico();
       }),
       Bus.Suscribir('proyecto:cargado', () => {
@@ -381,6 +386,33 @@ export class PanelLateral {
     Cuerpo.appendChild(Fila);
     this.EtiquetaModelo = this.EtiquetaArchivo(Cuerpo);
 
+    // Reparto Multi-VRM
+    const BloqueReparto = document.createElement('div');
+    BloqueReparto.className = 'ColumnaBotones';
+    const FilaReparto = document.createElement('div');
+    FilaReparto.className = 'FilaControles';
+    FilaReparto.append(
+      this.Boton('+ Añadir VRM', async () => {
+        const Archivo = await SeleccionarArchivo('.vrm');
+        if (Archivo) await this.CargarModelo(Archivo, true);
+      }),
+      this.Boton('+ Ejemplo', async () => {
+        Ctx.NotificarEstado('Descargando personaje adicional…');
+        try {
+          await Ctx.Modelos.CargarVrmDesdeUrl(
+            'https://cdn.jsdelivr.net/gh/pixiv/three-vrm@dev/packages/three-vrm/examples/models/three-vrm-girl.vrm',
+            true
+          );
+          this.TrasCargarModelo();
+        } catch (E) { Ctx.NotificarEstado(`Error: ${(E as Error).message}`, 'error'); }
+      })
+    );
+    this.ListaPersonajesContenedor = document.createElement('div');
+    this.ListaPersonajesContenedor.className = 'ListaPersonajes';
+    BloqueReparto.append(FilaReparto, this.ListaPersonajesContenedor);
+    Cuerpo.appendChild(BloqueReparto);
+    this.RefrescarListaPersonajes();
+
     const Fila2 = document.createElement('div');
     Fila2.className = 'FilaControles';
     Fila2.append(
@@ -470,13 +502,15 @@ export class PanelLateral {
 
     this.BotonClaveCadera = this.Boton('◆ Posición cadera', () => {
       if (!Ctx.Modelos.Vrm) return;
-      const Pos = Ctx.Modelos.ObtenerPosicionHueso('hips');
+      const PersId = Ctx.Modelos.PersonajeActivoId ?? undefined;
+      const Pos = Ctx.Modelos.ObtenerPosicionHueso('hips', PersId);
       const Cmd = new ComandoGuardarClave(
         Ctx.Animacion, 'HuesoPosicion', 'hips', 'Manual',
-        Ctx.Animacion.TiempoActual, [Pos.x, Pos.y, Pos.z], Ctx.Estado.InterpolacionPorDefecto
+        Ctx.Animacion.TiempoActual, [Pos.x, Pos.y, Pos.z], Ctx.Estado.InterpolacionPorDefecto,
+        undefined, PersId
       );
       Ctx.Historial.Ejecutar(Cmd);
-      const Pista = Ctx.Animacion.BuscarPista('HuesoPosicion', 'hips', 'Manual');
+      const Pista = Ctx.Animacion.BuscarPista('HuesoPosicion', 'hips', 'Manual', PersId);
       if (Pista) Ctx.Estado.SeleccionarUna(Pista.Id, Cmd.ClaveResultanteId);
       Ctx.NotificarEstado(
         Cmd.FueSobrescritura ? 'Clave de posición cadera sobrescrita.' : 'Clave de posición cadera insertada.',
@@ -486,20 +520,22 @@ export class PanelLateral {
 
     Fila3.append(this.BotonClaveHueso, this.BotonBorrarClaveHueso, this.BotonClaveCadera);
     Cuerpo.appendChild(Fila3);
-    this.Nota(Cuerpo, 'Haz clic directo en el modelo 3D para posar. Atajos: Q soltar, W mover, E rotar, R local/mundo, K pose.');
+    this.Nota(Cuerpo, 'Haz clic directo en el modelo 3D para posar o cambiar de personaje. Atajos: Q/W/E/R, K pose, Shift+F Cine.');
   }
 
   private GuardarClaveHuesoActivo(Silencioso = false): void {
     const Ctx = this.Contexto;
     const Nombre = this.SelectorHuesos.value;
+    const PersId = Ctx.Modelos.PersonajeActivoId ?? undefined;
     if (!Nombre || !Ctx.Modelos.Vrm) return;
-    const Euler = Ctx.Modelos.ObtenerRotacionHueso(Nombre);
+    const Euler = Ctx.Modelos.ObtenerRotacionHueso(Nombre, PersId);
     const Cmd = new ComandoGuardarClave(
       Ctx.Animacion, 'HuesoRotacion', Nombre, 'Manual',
-      Ctx.Animacion.TiempoActual, [Euler.x, Euler.y, Euler.z], Ctx.Estado.InterpolacionPorDefecto
+      Ctx.Animacion.TiempoActual, [Euler.x, Euler.y, Euler.z], Ctx.Estado.InterpolacionPorDefecto,
+      undefined, PersId
     );
     Ctx.Historial.Ejecutar(Cmd);
-    const Pista = Ctx.Animacion.BuscarPista('HuesoRotacion', Nombre, 'Manual');
+    const Pista = Ctx.Animacion.BuscarPista('HuesoRotacion', Nombre, 'Manual', PersId);
     if (Pista && !Silencioso) Ctx.Estado.SeleccionarUna(Pista.Id, Cmd.ClaveResultanteId);
     if (!Silencioso) {
       Ctx.NotificarEstado(
@@ -511,11 +547,11 @@ export class PanelLateral {
     }
   }
 
-  private async CargarModelo(Archivo: File): Promise<void> {
+  private async CargarModelo(Archivo: File, AgregarComoNuevo = false): Promise<void> {
     const Ctx = this.Contexto;
     Ctx.NotificarEstado(`Cargando ${Archivo.name}…`);
     try {
-      await Ctx.Modelos.CargarVrm(Archivo);
+      await Ctx.Modelos.CargarVrm(Archivo, { AgregarComoNuevo });
       this.TrasCargarModelo();
     } catch (E) {
       Ctx.NotificarEstado(`Error al cargar: ${(E as Error).message}`, 'error');
@@ -528,8 +564,64 @@ export class PanelLateral {
     this.EtiquetaModelo.textContent = `Modelo: ${Ctx.Modelos.NombreModelo}`;
     this.ActualizarListaHuesos();
     this.ActualizarExpresiones();
+    this.RefrescarListaPersonajes();
+    Ctx.Bus?.Emitir('personajes:cambiados', {
+      cantidad: Ctx.Modelos.Personajes.length,
+      activoId: Ctx.Modelos.PersonajeActivoId
+    });
     Ctx.Bus?.Emitir('modelo:cargado', { nombre: Ctx.Modelos.NombreModelo });
     Ctx.NotificarEstado('Modelo listo. Usa la biblioteca, posa en 3D o importa una animación.', 'exito');
+  }
+
+  private RefrescarListaPersonajes(): void {
+    const Contenedor = this.ListaPersonajesContenedor;
+    if (!Contenedor) return;
+    Contenedor.innerHTML = '';
+    const Ctx = this.Contexto;
+    const Lista = Ctx.Modelos.Personajes;
+    if (Lista.length === 0) return;
+
+    for (let I = 0; I < Lista.length; I++) {
+      const P = Lista[I];
+      const EsActivo = P.Id === Ctx.Modelos.PersonajeActivoId;
+      const Fila = document.createElement('div');
+      Fila.className = EsActivo ? 'ItemPersonaje Activo' : 'ItemPersonaje';
+
+      const BtnSel = document.createElement('button');
+      BtnSel.type = 'button';
+      BtnSel.className = 'BotonNombrePersonaje';
+      BtnSel.textContent = `${EsActivo ? '● ' : ''}${I + 1}. ${P.Nombre.replace(/\.vrm$/i, '')}`;
+      BtnSel.title = `Seleccionar personaje ${P.Nombre}`;
+      BtnSel.onclick = () => {
+        if (Ctx.Modelos.SeleccionarPersonaje(P.Id)) {
+          Ctx.Escena.ControlTransformacion.detach();
+          Ctx.Bus?.Emitir('personajes:cambiados', {
+            cantidad: Ctx.Modelos.Personajes.length,
+            activoId: P.Id
+          });
+        }
+      };
+      Fila.appendChild(BtnSel);
+
+      if (Lista.length > 1) {
+        const BtnDel = document.createElement('button');
+        BtnDel.type = 'button';
+        BtnDel.className = 'BotonIconoSolo BotonPeligro';
+        BtnDel.textContent = '✕';
+        BtnDel.title = `Quitar a ${P.Nombre} de la escena`;
+        BtnDel.setAttribute('aria-label', `Quitar ${P.Nombre}`);
+        BtnDel.onclick = () => {
+          Ctx.Escena.ControlTransformacion.detach();
+          Ctx.Modelos.EliminarPersonaje(P.Id);
+          Ctx.Bus?.Emitir('personajes:cambiados', {
+            cantidad: Ctx.Modelos.Personajes.length,
+            activoId: Ctx.Modelos.PersonajeActivoId
+          });
+        };
+        Fila.appendChild(BtnDel);
+      }
+      Contenedor.appendChild(Fila);
+    }
   }
 
   public ActualizarListaHuesos(): void {
@@ -700,11 +792,17 @@ export class PanelLateral {
     }));
   }
 
-  private ReiniciarDeslizadoresGlobales(): void {
-    for (const Item of this.DeslizadoresGlobales) {
-      Item.Entrada.value = '0';
-      Item.Salida.textContent = Item.Formato(0);
-    }
+  private SincronizarDeslizadoresGlobalesDesdePersonaje(): void {
+    if (this.DeslizadoresGlobales.length < 4) return;
+    const Vrm = this.Contexto.Modelos.Vrm;
+    const Vals = Vrm
+      ? [Vrm.scene.position.x, Vrm.scene.position.y, Vrm.scene.position.z, AGrados(Vrm.scene.rotation.y)]
+      : [0, 0, 0, 0];
+    this.DeslizadoresGlobales.forEach((Item, I) => {
+      const V = Vals[I] ?? 0;
+      Item.Entrada.value = String(V);
+      Item.Salida.textContent = Item.Formato(V);
+    });
   }
 
   // -------- Pestaña Rostro (Expresiones faciales) --------
@@ -719,14 +817,16 @@ export class PanelLateral {
     Fila.append(
       this.Boton('◆ Claves de expresión', () => {
         const Ctx = this.Contexto;
+        const PersId = Ctx.Modelos.PersonajeActivoId ?? undefined;
         const Sub = [];
-        for (const Nombre of Ctx.Modelos.ObtenerExpresiones()) {
-          const Peso = Ctx.Modelos.ObtenerValorExpresion(Nombre);
-          const PistaExist = Ctx.Animacion.BuscarPista('Expresion', Nombre, 'Manual');
+        for (const Nombre of Ctx.Modelos.ObtenerExpresiones(PersId)) {
+          const Peso = Ctx.Modelos.ObtenerValorExpresion(Nombre, PersId);
+          const PistaExist = Ctx.Animacion.BuscarPista('Expresion', Nombre, 'Manual', PersId);
           if (Peso > 0.001 || (PistaExist && Ctx.Animacion.BuscarClaveEnTiempo(PistaExist, Ctx.Animacion.TiempoActual))) {
             Sub.push(new ComandoGuardarClave(
               Ctx.Animacion, 'Expresion', Nombre, 'Manual',
-              Ctx.Animacion.TiempoActual, [Peso], Ctx.Estado.InterpolacionPorDefecto
+              Ctx.Animacion.TiempoActual, [Peso], Ctx.Estado.InterpolacionPorDefecto,
+              undefined, PersId
             ));
           }
         }
@@ -753,9 +853,11 @@ export class PanelLateral {
 
     for (const Nombre of Expresiones) {
       const GuardarExp = (Val: number, Silencioso = false) => {
+        const PersId = Ctx.Modelos.PersonajeActivoId ?? undefined;
         const Cmd = new ComandoGuardarClave(
           Ctx.Animacion, 'Expresion', Nombre, 'Manual',
-          Ctx.Animacion.TiempoActual, [Val], Ctx.Estado.InterpolacionPorDefecto
+          Ctx.Animacion.TiempoActual, [Val], Ctx.Estado.InterpolacionPorDefecto,
+          undefined, PersId
         );
         Ctx.Historial.Ejecutar(Cmd);
         if (!Silencioso) {
@@ -1108,7 +1210,8 @@ export class PanelLateral {
       const Cmd = new ComandoLote(`Clave de cámara (${T.toFixed(2)}s)`, [
         new ComandoGuardarClave(Ctx.Animacion, 'CamaraPosicion', 'Posición', 'Manual', T, [Pos.x, Pos.y, Pos.z], Interp),
         new ComandoGuardarClave(Ctx.Animacion, 'CamaraObjetivo', 'Objetivo', 'Manual', T, [Obj.x, Obj.y, Obj.z], Interp),
-        new ComandoGuardarClave(Ctx.Animacion, 'CamaraFOV', 'Campo de Visión', 'Manual', T, [FOV], Interp)
+        new ComandoGuardarClave(Ctx.Animacion, 'CamaraFOV', 'Campo de Visión', 'Manual', T, [FOV], Interp),
+        new ComandoGuardarClave(Ctx.Animacion, 'CamaraRoll', 'Inclinación (Roll)', 'Manual', T, [Ctx.Escena.RollCamara], Interp)
       ]);
       Ctx.Historial.Ejecutar(Cmd);
       Ctx.NotificarEstado('Toma de cámara guardada en el instante actual.', 'exito', true);
@@ -1128,9 +1231,46 @@ export class PanelLateral {
         }
       }
     );
+    const CtrlRoll = this.Deslizador(Cuerpo, 'Inclinación (Roll)', -180, 180, 1, AGrados(Ctx.Escena.RollCamara),
+      (V) => Ctx.Escena.EstablecerRollCamara(ARadianes(V)),
+      (V) => `${V.toFixed(0)}°`,
+      {
+        AlKeyframe: (V) => {
+          const Cmd = new ComandoGuardarClave(
+            Ctx.Animacion, 'CamaraRoll', 'Inclinación (Roll)', 'Manual',
+            Ctx.Animacion.TiempoActual, [ARadianes(V)], Ctx.Estado.InterpolacionPorDefecto
+          );
+          Ctx.Historial.Ejecutar(Cmd);
+          Ctx.NotificarEstado('Clave de Roll guardada.', 'exito', true);
+        }
+      }
+    );
+
+    const FilaSeg = document.createElement('div');
+    FilaSeg.className = 'FilaControles';
+    const LblSeg = document.createElement('label');
+    LblSeg.className = 'EtiquetaCompacta';
+    const SelSeg = document.createElement('select');
+    for (const [Val, Etq] of [['Ninguno', 'Libre'], ['Cabeza', 'Seguir Cabeza'], ['Cuerpo', 'Seguir Cuerpo']]) {
+      const O = document.createElement('option');
+      O.value = Val; O.textContent = Etq;
+      SelSeg.appendChild(O);
+    }
+    SelSeg.onchange = () => { Ctx.Escena.SeguimientoCamara = SelSeg.value as any; };
+    LblSeg.append(document.createTextNode('Auto-Follow '), SelSeg);
+    FilaSeg.appendChild(LblSeg);
+    Cuerpo.appendChild(FilaSeg);
+
+    this.Deslizador(Cuerpo, 'Vibración mano', 0, 1, 0.05, Ctx.Escena.VibracionCamara,
+      (V) => { Ctx.Escena.VibracionCamara = V; });
+
     this.SincronizadoresEscena.push(() => {
       CtrlFov.Entrada.value = String(Ctx.Escena.Camara.fov);
       CtrlFov.Salida.textContent = `${Ctx.Escena.Camara.fov.toFixed(0)}°`;
+      const RollDeg = AGrados(Ctx.Escena.RollCamara);
+      CtrlRoll.Entrada.value = String(RollDeg);
+      CtrlRoll.Salida.textContent = `${RollDeg.toFixed(0)}°`;
+      SelSeg.value = Ctx.Escena.SeguimientoCamara;
     });
   }
 
@@ -1383,9 +1523,10 @@ export class PanelLateral {
     const Anim = this.Contexto.Animacion;
     const T = Anim.TiempoActual;
     const Hueso = this.SelectorHuesos?.value;
+    const PersId = this.Contexto.Modelos.PersonajeActivoId ?? undefined;
 
     if (this.BotonClaveHueso && Hueso) {
-      const Pista = Anim.BuscarPista('HuesoRotacion', Hueso, 'Manual');
+      const Pista = Anim.BuscarPista('HuesoRotacion', Hueso, 'Manual', PersId);
       const Existe = Pista ? Anim.BuscarClaveEnTiempo(Pista, T) !== undefined : false;
       this.BotonClaveHueso.textContent = Existe ? '◆ Sobrescribir rotación' : '◆ Clave rotación';
       this.BotonClaveHueso.classList.toggle('EstadoSobrescribir', Existe);
@@ -1393,7 +1534,7 @@ export class PanelLateral {
     }
 
     if (this.BotonClaveCadera) {
-      const PistaPos = Anim.BuscarPista('HuesoPosicion', 'hips', 'Manual');
+      const PistaPos = Anim.BuscarPista('HuesoPosicion', 'hips', 'Manual', PersId);
       const ExistePos = PistaPos ? Anim.BuscarClaveEnTiempo(PistaPos, T) !== undefined : false;
       this.BotonClaveCadera.textContent = ExistePos ? '◆ Sobrescribir cadera' : '◆ Posición cadera';
       this.BotonClaveCadera.classList.toggle('EstadoSobrescribir', ExistePos);
@@ -1409,7 +1550,7 @@ export class PanelLateral {
     }
 
     for (const Item of this.BotonesClaveExpresion) {
-      const Pista = Anim.BuscarPista('Expresion', Item.Expresion, 'Manual');
+      const Pista = Anim.BuscarPista('Expresion', Item.Expresion, 'Manual', PersId);
       const Existe = Pista ? Anim.BuscarClaveEnTiempo(Pista, T) !== undefined : false;
       Item.Boton.classList.toggle('EstadoSobrescribir', Existe);
     }
@@ -1434,8 +1575,9 @@ export class PanelLateral {
     this.ActualizarListaHuesos();
     this.ActualizarExpresiones();
     this.ActualizarEtiquetaAudio();
+    this.RefrescarListaPersonajes();
     this.EtiquetaModelo.textContent = this.Contexto.Modelos.Vrm
-      ? `Modelo: ${this.Contexto.Modelos.NombreModelo}`
+      ? `Modelo (${this.Contexto.Modelos.Personajes.length}): ${this.Contexto.Modelos.NombreModelo}`
       : 'Ningún archivo cargado';
     this.ActualizarChipsHuesoActivo(this.Contexto.Estado.HuesoSeleccionado);
     this.ActualizarIndicadoresClave();

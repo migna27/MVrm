@@ -88,11 +88,14 @@
             <button type="button" id="BotonEsqueletoVisor" aria-pressed="false" title="Mostrar u ocultar huesos">Esqueleto</button>
             <button type="button" id="BotonEspejarVisor" title="Espejar pose izquierda ↔ derecha">Espejar L↔R</button>
             <button type="button" id="BotonReposoVisor" title="Restablecer a pose de reposo">Reposo</button>
+            <button type="button" id="BotonModoCine" aria-pressed="false" title="Modo Cine: ocultar paneles y ver a pantalla completa (Shift+F)">🎬 Cine</button>
           </div>
         </div>
 
+        <button type="button" id="BotonSalirCine" class="BotonSalirCine Oculto" title="Salir del Modo Cine (Esc / Shift+F)">✕ Salir de Modo Cine</button>
+
         <div id="ZonaSoltar" class="Oculto">
-          <div>Suelta archivos .vrm, .vrma, .bvh, .json, audio o imagen de fondo</div>
+          <div>Suelta archivos .vrm, .vrma, .vmd, .bvh, .json, audio o imagen de fondo</div>
         </div>
         <div id="PilaNotificaciones" aria-live="off"></div>
       </main>

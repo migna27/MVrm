@@ -45,6 +45,9 @@ export class GestorAnimacion {
   private readonly _HuesosRestablecer = new Set<string>();
   private readonly _ExpresionesRestablecer = new Set<string>();
   private readonly _HuesosConPosicion = new Set<string>();
+  private readonly _ResetHuesosPorPers = new Map<string, Set<string>>();
+  private readonly _ResetPosPorPers = new Map<string, Set<string>>();
+  private readonly _ResetExpPorPers = new Map<string, Set<string>>();
   private readonly _UltimosValoresEfectos = new Map<string, number>();
 
   public Duracion = 10;          // Duración total de la línea de tiempo (s)
@@ -105,20 +108,58 @@ export class GestorAnimacion {
     }
   }
 
-  /** Busca una pista sin crearla. */
-  public BuscarPista(Tipo: TipoObjetivoPista, Objetivo: string, Grupo: GrupoPista): PistaAnimacion | undefined {
-    return this._Pistas.find((P) => P.Tipo === Tipo && P.Objetivo === Objetivo && P.Grupo === Grupo);
+  private EsTipoPorPersonaje(Tipo: TipoObjetivoPista): boolean {
+    return Tipo === 'HuesoRotacion' || Tipo === 'HuesoPosicion' || Tipo === 'Expresion';
   }
 
-  /** Busca (o crea) la pista para un objetivo y grupo dados. */
-  public ObtenerOCrearPista(Tipo: TipoObjetivoPista, Objetivo: string, Grupo: GrupoPista): PistaAnimacion {
-    let Pista = this.BuscarPista(Tipo, Objetivo, Grupo);
+  private ResolverPersonajeId(Tipo: TipoObjetivoPista, PersonajeId?: string): string | undefined {
+    if (!this.EsTipoPorPersonaje(Tipo)) return undefined;
+    return PersonajeId ?? this.Modelos.PersonajeActivoId ?? this.Modelos.Personajes[0]?.Id ?? undefined;
+  }
+
+  private CoincidePersonaje(Pista: PistaAnimacion, PersonajeId?: string): boolean {
+    if (!this.EsTipoPorPersonaje(Pista.Tipo)) return true;
+    const Destino = PersonajeId ?? this.Modelos.PersonajeActivoId ?? this.Modelos.Personajes[0]?.Id;
+    const PistaPers = Pista.PersonajeId ?? this.Modelos.Personajes[0]?.Id;
+    if (!Destino || !PistaPers) return true;
+    return PistaPers === Destino;
+  }
+
+  /** Busca una pista sin crearla. */
+  public BuscarPista(
+    Tipo: TipoObjetivoPista,
+    Objetivo: string,
+    Grupo: GrupoPista,
+    PersonajeId?: string
+  ): PistaAnimacion | undefined {
+    return this._Pistas.find(
+      (P) => P.Tipo === Tipo && P.Objetivo === Objetivo && P.Grupo === Grupo && this.CoincidePersonaje(P, PersonajeId)
+    );
+  }
+
+  /** Busca (o crea) la pista para un objetivo, grupo y personaje dados. */
+  public ObtenerOCrearPista(
+    Tipo: TipoObjetivoPista,
+    Objetivo: string,
+    Grupo: GrupoPista,
+    PersonajeId?: string
+  ): PistaAnimacion {
+    const DestId = this.ResolverPersonajeId(Tipo, PersonajeId);
+    let Pista = this.BuscarPista(Tipo, Objetivo, Grupo, DestId);
     if (!Pista) {
       const NombreLegible = NOMBRES_HUESOS_LEGIBLES[Objetivo] ?? Objetivo;
+      const Pers = DestId ? this.Modelos.ObtenerPersonaje(DestId) : null;
+      const PrefijoPers = Pers && this.Modelos.Personajes.length > 1
+        ? `[${Pers.Nombre.replace(/\.vrm$/i, '').slice(0, 12)}] `
+        : '';
       Pista = {
         Id: GenerarId(),
-        Nombre: `${this.NombreGrupo(Grupo)} · ${NombreLegible}`,
-        Tipo, Objetivo, Grupo, Claves: []
+        Nombre: `${PrefijoPers}${this.NombreGrupo(Grupo)} · ${NombreLegible}`,
+        Tipo,
+        Objetivo,
+        Grupo,
+        ...(DestId ? { PersonajeId: DestId } : {}),
+        Claves: []
       };
       this._Pistas.push(Pista);
       this._PistasSucias = true;
@@ -287,7 +328,11 @@ export class GestorAnimacion {
   public AgregarPistas(Nuevas: PistaAnimacion[]): void {
     for (const Nueva of Nuevas) {
       const Existente = this._Pistas.find(
-        (P) => P.Tipo === Nueva.Tipo && P.Objetivo === Nueva.Objetivo && P.Grupo === Nueva.Grupo
+        (P) =>
+          P.Tipo === Nueva.Tipo &&
+          P.Objetivo === Nueva.Objetivo &&
+          P.Grupo === Nueva.Grupo &&
+          this.CoincidePersonaje(P, Nueva.PersonajeId)
       );
       if (Existente) {
         for (const Clave of Nueva.Claves) {
@@ -315,28 +360,38 @@ export class GestorAnimacion {
     this.NotificarCambioPistas('pistas-agregadas');
   }
 
-  /** Inserta claves de la pose actual para todos los huesos y expresiones. */
-  public InsertarPoseCompleta(Tiempo: number, Interpolacion: TipoInterpolacion = 'Suave'): { Insertadas: number; Sobrescritas: number } {
-    if (!this.Modelos.Vrm) return { Insertadas: 0, Sobrescritas: 0 };
+  /** Inserta claves de la pose actual para todos los huesos y expresiones del personaje activo. */
+  public InsertarPoseCompleta(
+    Tiempo: number,
+    Interpolacion: TipoInterpolacion = 'Suave',
+    PersonajeId?: string
+  ): { Insertadas: number; Sobrescritas: number } {
+    const P = this.Modelos.ObtenerPersonaje(PersonajeId);
+    if (!P) return { Insertadas: 0, Sobrescritas: 0 };
     let Insertadas = 0;
     let Sobrescritas = 0;
 
-    for (const Nombre of this.Modelos.ObtenerHuesosDisponibles()) {
-      const Euler = this.Modelos.ObtenerRotacionHueso(Nombre);
-      const Pista = this.ObtenerOCrearPista('HuesoRotacion', Nombre, 'Manual');
+    const Principales = new Set(this.Modelos.ObtenerHuesosDisponibles(P.Id));
+    for (const Nombre of this.Modelos.ObtenerTodosHuesosDisponibles(P.Id)) {
+      const Euler = this.Modelos.ObtenerRotacionHueso(Nombre, P.Id);
+      const PistaExist = this.BuscarPista('HuesoRotacion', Nombre, 'Manual', P.Id);
+      if (!Principales.has(Nombre) && !PistaExist && Math.abs(Euler.x) + Math.abs(Euler.y) + Math.abs(Euler.z) < 0.005) {
+        continue;
+      }
+      const Pista = PistaExist ?? this.ObtenerOCrearPista('HuesoRotacion', Nombre, 'Manual', P.Id);
       const Res = this.GuardarClave(Pista, Tiempo, [Euler.x, Euler.y, Euler.z], Interpolacion);
       if (Res.Sobrescrita) Sobrescritas++; else Insertadas++;
     }
-    const PosCadera = this.Modelos.ObtenerPosicionHueso('hips');
-    const PistaPos = this.ObtenerOCrearPista('HuesoPosicion', 'hips', 'Manual');
+    const PosCadera = this.Modelos.ObtenerPosicionHueso('hips', P.Id);
+    const PistaPos = this.ObtenerOCrearPista('HuesoPosicion', 'hips', 'Manual', P.Id);
     const ResPos = this.GuardarClave(PistaPos, Tiempo, [PosCadera.x, PosCadera.y, PosCadera.z], Interpolacion);
     if (ResPos.Sobrescrita) Sobrescritas++; else Insertadas++;
 
-    for (const Expresion of this.Modelos.ObtenerExpresiones()) {
-      const Peso = this.Modelos.ObtenerValorExpresion(Expresion);
-      const PistaExistente = this.BuscarPista('Expresion', Expresion, 'Manual');
+    for (const Expresion of this.Modelos.ObtenerExpresiones(P.Id)) {
+      const Peso = this.Modelos.ObtenerValorExpresion(Expresion, P.Id);
+      const PistaExistente = this.BuscarPista('Expresion', Expresion, 'Manual', P.Id);
       if (Peso > 0.001 || (PistaExistente && this.BuscarClaveEnTiempo(PistaExistente, Tiempo))) {
-        const Pista = PistaExistente ?? this.ObtenerOCrearPista('Expresion', Expresion, 'Manual');
+        const Pista = PistaExistente ?? this.ObtenerOCrearPista('Expresion', Expresion, 'Manual', P.Id);
         const ResExp = this.GuardarClave(Pista, Tiempo, [Peso], Interpolacion);
         if (ResExp.Sobrescrita) Sobrescritas++; else Insertadas++;
       }
@@ -345,21 +400,21 @@ export class GestorAnimacion {
   }
 
   /** Lee el valor actual en vivo del visor/escena para cualquier objetivo de pista. */
-  public ObtenerValorActualObjetivo(Tipo: TipoObjetivoPista, Objetivo: string): number[] | null {
+  public ObtenerValorActualObjetivo(Tipo: TipoObjetivoPista, Objetivo: string, PersonajeId?: string): number[] | null {
     switch (Tipo) {
       case 'HuesoRotacion': {
-        if (!this.Modelos.Vrm || !this.Modelos.ObtenerNodoHueso(Objetivo)) return null;
-        const E = this.Modelos.ObtenerRotacionHueso(Objetivo);
+        if (!this.Modelos.ObtenerNodoHueso(Objetivo, PersonajeId)) return null;
+        const E = this.Modelos.ObtenerRotacionHueso(Objetivo, PersonajeId);
         return [E.x, E.y, E.z];
       }
       case 'HuesoPosicion': {
-        if (!this.Modelos.Vrm || !this.Modelos.ObtenerNodoHueso(Objetivo)) return null;
-        const P = this.Modelos.ObtenerPosicionHueso(Objetivo);
+        if (!this.Modelos.ObtenerNodoHueso(Objetivo, PersonajeId)) return null;
+        const P = this.Modelos.ObtenerPosicionHueso(Objetivo, PersonajeId);
         return [P.x, P.y, P.z];
       }
       case 'Expresion': {
-        if (!this.Modelos.Vrm) return null;
-        return [this.Modelos.ObtenerValorExpresion(Objetivo)];
+        if (!this.Modelos.ObtenerPersonaje(PersonajeId)) return null;
+        return [this.Modelos.ObtenerValorExpresion(Objetivo, PersonajeId)];
       }
       case 'CamaraPosicion': {
         const P = this.Escena.Camara.position;
@@ -371,6 +426,8 @@ export class GestorAnimacion {
       }
       case 'CamaraFOV':
         return [this.Escena.Camara.fov];
+      case 'CamaraRoll':
+        return [this.Escena.RollCamara];
       case 'Efecto':
       case 'Luz': {
         if (Objetivo === 'Exposicion') return [this.Escena.Renderer.toneMappingExposure];
@@ -566,39 +623,58 @@ export class GestorAnimacion {
 
   /**
    * Evalúa todas las pistas activas (no silenciadas) en un tiempo dado y aplica
-   * el resultado al modelo, luces, efectos o cámara.
+   * el resultado al personaje correspondiente, luces, efectos o cámara.
    */
   public EvaluarEn(Tiempo: number): void {
     const PistasOrdenadas = this.ObtenerPistasOrdenadas();
     if (PistasOrdenadas.length === 0) return;
 
-    this._HuesosRestablecer.clear();
-    this._ExpresionesRestablecer.clear();
-    this._HuesosConPosicion.clear();
+    this._ResetHuesosPorPers.clear();
+    this._ResetPosPorPers.clear();
+    this._ResetExpPorPers.clear();
+    const PersDefault = this.Modelos.Personajes[0]?.Id ?? '__default__';
+
+    const AgregarSet = (Mapa: Map<string, Set<string>>, LlavePers: string, Valor: string) => {
+      let S = Mapa.get(LlavePers);
+      if (!S) {
+        S = new Set<string>();
+        Mapa.set(LlavePers, S);
+      }
+      S.add(Valor);
+    };
 
     for (const Pista of PistasOrdenadas) {
       if (Pista.Silenciada || Pista.Claves.length === 0) continue;
+      const KeyPers = Pista.PersonajeId ?? PersDefault;
       if (Pista.Tipo === 'Expresion') {
-        this._ExpresionesRestablecer.add(Pista.Objetivo);
+        AgregarSet(this._ResetExpPorPers, KeyPers, Pista.Objetivo);
       } else if (Pista.Tipo === 'HuesoRotacion' || Pista.Tipo === 'HuesoPosicion') {
-        this._HuesosRestablecer.add(Pista.Objetivo);
-        if (Pista.Tipo === 'HuesoPosicion') this._HuesosConPosicion.add(Pista.Objetivo);
+        AgregarSet(this._ResetHuesosPorPers, KeyPers, Pista.Objetivo);
+        if (Pista.Tipo === 'HuesoPosicion') AgregarSet(this._ResetPosPorPers, KeyPers, Pista.Objetivo);
       }
     }
 
-    if (this.Modelos.Vrm) {
-      for (const Nombre of this._HuesosRestablecer) {
-        const Reposo = this.Modelos.PoseReposo.get(Nombre);
-        const Nodo = this.Modelos.ObtenerNodoHueso(Nombre);
+    for (const [KeyPers, Huesos] of this._ResetHuesosPorPers) {
+      const Pers = this.Modelos.ObtenerPersonaje(KeyPers === '__default__' ? undefined : KeyPers);
+      if (!Pers) continue;
+      const HuesosPos = this._ResetPosPorPers.get(KeyPers);
+      for (const Nombre of Huesos) {
+        const Reposo = Pers.PoseReposo.get(Nombre);
+        const Nodo = this.Modelos.ObtenerNodoHueso(Nombre, Pers.Id);
         if (Reposo && Nodo) {
           Nodo.quaternion.copy(Reposo.Rotacion);
-          if (this._HuesosConPosicion.has(Nombre)) {
+          if (HuesosPos?.has(Nombre)) {
             Nodo.position.copy(Reposo.Posicion);
           }
         }
       }
-      for (const Nombre of this._ExpresionesRestablecer) {
-        this.Modelos.EstablecerExpresion(Nombre, 0);
+    }
+
+    for (const [KeyPers, Expresiones] of this._ResetExpPorPers) {
+      const PersId = KeyPers === '__default__' ? undefined : KeyPers;
+      if (!this.Modelos.ObtenerPersonaje(PersId)) continue;
+      for (const Nombre of Expresiones) {
+        this.Modelos.EstablecerExpresion(Nombre, 0, PersId);
       }
     }
 
@@ -606,8 +682,7 @@ export class GestorAnimacion {
       if (Pista.Silenciada || Pista.Claves.length === 0) continue;
 
       if (Pista.Tipo === 'HuesoRotacion') {
-        if (!this.Modelos.Vrm) continue;
-        const Nodo = this.Modelos.ObtenerNodoHueso(Pista.Objetivo);
+        const Nodo = this.Modelos.ObtenerNodoHueso(Pista.Objetivo, Pista.PersonajeId);
         if (!Nodo) continue;
         const Claves = Pista.Claves;
         const N = Claves.length;
@@ -642,12 +717,12 @@ export class GestorAnimacion {
       if (!Valor) continue;
 
       if (Pista.Tipo === 'HuesoPosicion') {
-        if (!this.Modelos.Vrm) continue;
+        if (!this.Modelos.ObtenerPersonaje(Pista.PersonajeId)) continue;
         this._Vec3.set(Valor[0], Valor[1], Valor[2]);
-        this.Modelos.EstablecerPosicionHueso(Pista.Objetivo, this._Vec3);
+        this.Modelos.EstablecerPosicionHueso(Pista.Objetivo, this._Vec3, Pista.PersonajeId);
       } else if (Pista.Tipo === 'Expresion') {
-        if (!this.Modelos.Vrm) continue;
-        this.Modelos.EstablecerExpresion(Pista.Objetivo, Limitar(Valor[0], 0, 1));
+        if (!this.Modelos.ObtenerPersonaje(Pista.PersonajeId)) continue;
+        this.Modelos.EstablecerExpresion(Pista.Objetivo, Limitar(Valor[0], 0, 1), Pista.PersonajeId);
       } else if (Pista.Tipo === 'Efecto' || Pista.Tipo === 'Luz') {
         this.AplicarEfectoLuz(Pista.Objetivo, Valor[0]);
       } else if (Pista.Tipo === 'CamaraPosicion') {
@@ -657,6 +732,8 @@ export class GestorAnimacion {
       } else if (Pista.Tipo === 'CamaraFOV') {
         this.Escena.Camara.fov = Valor[0];
         this.Escena.Camara.updateProjectionMatrix();
+      } else if (Pista.Tipo === 'CamaraRoll') {
+        this.Escena.EstablecerRollCamara(Valor[0]);
       }
     }
   }
@@ -740,10 +817,12 @@ export class GestorAnimacion {
     Clip: THREE.AnimationClip,
     Fps: number,
     Grupo: GrupoPista,
-    ActualizarDuracion = true
+    ActualizarDuracion = true,
+    PersonajeId?: string
   ): PistaAnimacion[] {
-    if (!this.Modelos.Vrm) return [];
-    const Raiz = this.Modelos.Vrm.scene;
+    const Pers = this.Modelos.ObtenerPersonaje(PersonajeId);
+    if (!Pers) return [];
+    const Raiz = Pers.Vrm.scene;
     const Mezclador = new THREE.AnimationMixer(Raiz);
     const Accion = Mezclador.clipAction(Clip);
     Accion.play();
@@ -760,8 +839,8 @@ export class GestorAnimacion {
       Tiempos.push(T);
       Mezclador.setTime(T);
 
-      for (const Nombre of this.Modelos.ObtenerHuesosDisponibles()) {
-        const Nodo = this.Modelos.ObtenerNodoHueso(Nombre)!;
+      for (const Nombre of this.Modelos.ObtenerTodosHuesosDisponibles(Pers.Id)) {
+        const Nodo = this.Modelos.ObtenerNodoHueso(Nombre, Pers.Id)!;
         const Euler = new THREE.Euler().setFromQuaternion(Nodo.quaternion, 'XYZ');
         if (!SerieHuesos.has(Nombre)) SerieHuesos.set(Nombre, []);
         SerieHuesos.get(Nombre)!.push([Euler.x, Euler.y, Euler.z]);
@@ -770,26 +849,30 @@ export class GestorAnimacion {
           SeriePosicion.get(Nombre)!.push([Nodo.position.x, Nodo.position.y, Nodo.position.z]);
         }
       }
-      for (const Expresion of this.Modelos.ObtenerExpresiones()) {
+      for (const Expresion of this.Modelos.ObtenerExpresiones(Pers.Id)) {
         if (!SerieExpresiones.has(Expresion)) SerieExpresiones.set(Expresion, []);
-        SerieExpresiones.get(Expresion)!.push(this.Modelos.ObtenerValorExpresion(Expresion));
+        SerieExpresiones.get(Expresion)!.push(this.Modelos.ObtenerValorExpresion(Expresion, Pers.Id));
       }
     }
 
     Mezclador.stopAllAction();
     Mezclador.uncacheRoot(Raiz);
-    this.Modelos.RestablecerPose();
+    this.Modelos.RestablecerPose(Pers.Id);
 
     const Pistas: PistaAnimacion[] = [];
     const HayVariacion = (Serie: number[][], Umbral: number) =>
       Serie.some((V) => V.some((X, J) => Math.abs(X - Serie[0][J]) > Umbral));
 
+    const PrefijoPers = this.Modelos.Personajes.length > 1
+      ? `[${Pers.Nombre.replace(/\.vrm$/i, '').slice(0, 12)}] `
+      : '';
+
     for (const [Nombre, Serie] of SerieHuesos) {
       if (!HayVariacion(Serie, 0.01)) continue;
       Pistas.push({
         Id: GenerarId(),
-        Nombre: `${this.NombreGrupo(Grupo)} · ${NOMBRES_HUESOS_LEGIBLES[Nombre] ?? Nombre}`,
-        Tipo: 'HuesoRotacion', Objetivo: Nombre, Grupo,
+        Nombre: `${PrefijoPers}${this.NombreGrupo(Grupo)} · ${NOMBRES_HUESOS_LEGIBLES[Nombre] ?? Nombre}`,
+        Tipo: 'HuesoRotacion', Objetivo: Nombre, Grupo, PersonajeId: Pers.Id,
         Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: Serie[I], Interpolacion: 'Suave' }))
       });
     }
@@ -797,8 +880,8 @@ export class GestorAnimacion {
       if (!HayVariacion(Serie, 0.005)) continue;
       Pistas.push({
         Id: GenerarId(),
-        Nombre: `${this.NombreGrupo(Grupo)} · Posición cadera`,
-        Tipo: 'HuesoPosicion', Objetivo: Nombre, Grupo,
+        Nombre: `${PrefijoPers}${this.NombreGrupo(Grupo)} · Posición cadera`,
+        Tipo: 'HuesoPosicion', Objetivo: Nombre, Grupo, PersonajeId: Pers.Id,
         Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: Serie[I], Interpolacion: 'Suave' }))
       });
     }
@@ -806,8 +889,8 @@ export class GestorAnimacion {
       if (!HayVariacion(Serie.map((V) => [V]), 0.02)) continue;
       Pistas.push({
         Id: GenerarId(),
-        Nombre: `${this.NombreGrupo(Grupo)} · ${Nombre}`,
-        Tipo: 'Expresion', Objetivo: Nombre, Grupo,
+        Nombre: `${PrefijoPers}${this.NombreGrupo(Grupo)} · ${Nombre}`,
+        Tipo: 'Expresion', Objetivo: Nombre, Grupo, PersonajeId: Pers.Id,
         Claves: Tiempos.map((T, I) => ({ Id: GenerarId(), Tiempo: T, Valor: [Serie[I]], Interpolacion: 'Suave' }))
       });
     }

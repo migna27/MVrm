@@ -169,6 +169,74 @@
     min-height: 0;
   }
 
+  /* Modo Cine: estudio libre de distracciones en pantalla completa */
+  #Aplicacion.ModoCine {
+    grid-template-rows: 1fr;
+  }
+
+  #Aplicacion.ModoCine #BarraSuperior,
+  #Aplicacion.ModoCine #PanelIzquierdo,
+  #Aplicacion.ModoCine #PanelDerecho,
+  #Aplicacion.ModoCine #DivisorTimeline,
+  #Aplicacion.ModoCine #ZonaLineaTiempo,
+  #Aplicacion.ModoCine #BarraVisor,
+  #Aplicacion.ModoCine #SuperposicionVisor {
+    display: none;
+  }
+
+  #Aplicacion.ModoCine #ZonaCentral {
+    grid-template-columns: 1fr;
+  }
+
+  .BotonSalirCine {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 8;
+    background: rgba(17, 22, 33, 0.72);
+    backdrop-filter: blur(8px);
+    opacity: 0.45;
+  }
+
+  .BotonSalirCine:hover,
+  .BotonSalirCine:focus-visible {
+    opacity: 1;
+  }
+
+  .ListaPersonajes {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .ItemPersonaje {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 4px 6px;
+    background: var(--ColorPanelClaro);
+    border: 1px solid var(--ColorBorde);
+    border-radius: var(--RadioControl);
+  }
+
+  .ItemPersonaje.Activo {
+    border-color: var(--ColorAcento);
+    background: var(--ColorAcentoTenue);
+  }
+
+  .BotonNombrePersonaje {
+    flex: 1;
+    justify-content: flex-start;
+    background: transparent;
+    border-color: transparent;
+    padding: 2px 4px;
+    min-block-size: 24px;
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .PanelContenedor {
     display: flex;
     flex-direction: column;

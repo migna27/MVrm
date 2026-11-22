@@ -26,6 +26,11 @@ export interface MapaEventos {
   'estudio:configuracion': { clave: string };
   'proyecto:cargado': Record<string, never>;
   'audio:cambiado': Record<string, never>;
+  'personajes:cambiados': { cantidad: number; activoId: string | null };
+  'props:cambiados': { cantidad: number; activoId: string | null };
+  'entorno:cambiado': { preset?: string };
+  'luces:cambiadas': Record<string, never>;
+  'modoCine:cambiado': { activo: boolean };
 }
 
 /** Función oyente para un evento específico del mapa. */

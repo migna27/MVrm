@@ -48,14 +48,15 @@ export class ComandoGuardarClave implements Comando {
     private readonly Tiempo: number,
     private readonly Valor: number[],
     private readonly Interpolacion: TipoInterpolacion = 'Suave',
-    private readonly Tolerancia: number = TOLERANCIA_SOBRESCRITURA
+    private readonly Tolerancia: number = TOLERANCIA_SOBRESCRITURA,
+    private readonly PersonajeId?: string
   ) {
     this.Descripcion = `Clave en ${Objetivo} (${Tiempo.toFixed(2)}s)`;
   }
 
   public Ejecutar(): void {
-    const ExistiaAntes = this.Anim.BuscarPista(this.Tipo, this.Objetivo, this.Grupo);
-    const Pista = ExistiaAntes ?? this.Anim.ObtenerOCrearPista(this.Tipo, this.Objetivo, this.Grupo);
+    const ExistiaAntes = this.Anim.BuscarPista(this.Tipo, this.Objetivo, this.Grupo, this.PersonajeId);
+    const Pista = ExistiaAntes ?? this.Anim.ObtenerOCrearPista(this.Tipo, this.Objetivo, this.Grupo, this.PersonajeId);
     if (!ExistiaAntes) {
       this.PistaCreadaId = Pista.Id;
     }
@@ -334,7 +335,8 @@ export class ComandoInsertarPose implements Comando {
   constructor(
     private readonly Anim: GestorAnimacion,
     private readonly Tiempo: number,
-    private readonly Interpolacion: TipoInterpolacion = 'Suave'
+    private readonly Interpolacion: TipoInterpolacion = 'Suave',
+    private readonly PersonajeId?: string
   ) {
     this.Descripcion = `Pose completa (${Tiempo.toFixed(2)}s)`;
   }
@@ -350,7 +352,7 @@ export class ComandoInsertarPose implements Comando {
       return;
     }
 
-    const Res = this.Anim.InsertarPoseCompleta(this.Tiempo, this.Interpolacion);
+    const Res = this.Anim.InsertarPoseCompleta(this.Tiempo, this.Interpolacion, this.PersonajeId);
     this.Insertadas = Res.Insertadas;
     this.Sobrescritas = Res.Sobrescritas;
     this.SnapshotDespues = this.Anim.Pistas.map(ClonarPista);
@@ -446,13 +448,18 @@ export class ComandoImportarAnimacion implements Comando {
     }
 
     if (this.Opciones.Modo === 'ReemplazarGrupo') {
-      this.Anim.Pistas = this.Anim.Pistas.filter((P) => P.Grupo !== this.Opciones.GrupoDestino);
+      const DestinoPers = this.Opciones.PersonajeId ?? ClonesNuevas.find((P) => P.PersonajeId)?.PersonajeId;
+      this.Anim.Pistas = this.Anim.Pistas.filter((P) => {
+        if (P.Grupo !== this.Opciones.GrupoDestino) return true;
+        if (DestinoPers && P.PersonajeId && P.PersonajeId !== DestinoPers) return true;
+        return false;
+      });
       this.Anim.AgregarPistas(ClonesNuevas);
     } else if (this.Opciones.Modo === 'SobrescribirRango') {
       const Ini = Math.max(0, this.Opciones.TiempoInicio - 0.002);
       const Fin = this.Opciones.TiempoInicio + Math.max(0.05, this.DuracionClip * this.Opciones.EscalaTiempo) + 0.002;
       for (const Nueva of ClonesNuevas) {
-        const Existente = this.Anim.BuscarPista(Nueva.Tipo, Nueva.Objetivo, Nueva.Grupo);
+        const Existente = this.Anim.BuscarPista(Nueva.Tipo, Nueva.Objetivo, Nueva.Grupo, Nueva.PersonajeId);
         if (Existente && !Existente.Bloqueada) {
           Existente.Claves = Existente.Claves.filter((C) => C.Tiempo < Ini || C.Tiempo > Fin);
         }
@@ -624,7 +631,7 @@ export class ComandoPegarClaves implements Comando {
     this.ClavesPegadas = [];
 
     for (const Item of this.Portapapeles.Claves) {
-      const Pista = this.Anim.ObtenerOCrearPista(Item.Tipo, Item.Objetivo, Item.Grupo);
+      const Pista = this.Anim.ObtenerOCrearPista(Item.Tipo, Item.Objetivo, Item.Grupo, Item.PersonajeId);
       if (Pista.Bloqueada) continue;
       const T = Limitar(this.TiempoDestino + Item.DeltaTiempo, 0, this.Anim.Duracion);
       const Res = this.Anim.GuardarClave(Pista, T, Item.Valor, Item.Interpolacion, 0.008);

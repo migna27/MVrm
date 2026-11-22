@@ -14,6 +14,7 @@ export interface ClavePortapapeles {
   Tipo: TipoObjetivoPista;
   Objetivo: string;
   Grupo: GrupoPista;
+  PersonajeId?: string;
   DeltaTiempo: number;
   Valor: number[];
   Interpolacion: TipoInterpolacion;

@@ -16,6 +16,8 @@ import { RGBShiftShader } from 'three/examples/jsm/shaders/RGBShiftShader.js';
 import { FilmShader } from 'three/examples/jsm/shaders/FilmShader.js';
 import { VignetteShader } from 'three/examples/jsm/shaders/VignetteShader.js';
 import { Limitar } from '../Utilidades';
+import { ModoSeguimientoCamara } from '../Tipos';
+import type { GestorModelos } from './GestorModelos';
 
 export class GestorEscena {
   public Renderer!: THREE.WebGLRenderer;
@@ -34,7 +36,16 @@ export class GestorEscena {
 
   public LuzDireccional!: THREE.DirectionalLight;
   public LuzAmbiental!: THREE.AmbientLight;
+  public LuzPersonaje!: THREE.DirectionalLight;
+  public LuzPersonajeActiva = true;
+  public IntensidadLuzPersonaje = 0.75;
   private Rejilla!: THREE.GridHelper;
+
+  public RollCamara = 0;
+  public SeguimientoCamara: ModoSeguimientoCamara = 'Ninguno';
+  public VibracionCamara = 0;
+  private readonly _TargetSeguimiento = new THREE.Vector3();
+  private _TiempoCamara = 0;
 
   public ModeloFondo: THREE.Object3D | null = null;
   private TexturaFondo: THREE.Texture | null = null;
@@ -103,6 +114,12 @@ export class GestorEscena {
     const LuzRelleno = new THREE.DirectionalLight(0x88aaff, 0.5);
     LuzRelleno.position.set(-2.5, 1.5, -1.5);
     this.Escena.add(LuzRelleno);
+
+    // Luz dedicada suave para mantener rostro y silueta del personaje legibles en escenarios oscuros
+    this.LuzPersonaje = new THREE.DirectionalLight(0xffffff, this.IntensidadLuzPersonaje);
+    this.LuzPersonaje.position.set(0.8, 2.2, 2.6);
+    this.LuzPersonaje.castShadow = false;
+    this.Escena.add(this.LuzPersonaje);
 
     // Rejilla de piso como referencia espacial
     this.Rejilla = new THREE.GridHelper(20, 40, 0x3a4152, 0x272b36);
@@ -177,9 +194,48 @@ export class GestorEscena {
     this.Camara.updateProjectionMatrix();
   }
 
+  /** Fija la inclinación lateral (Roll) de cámara en radianes. */
+  public EstablecerRollCamara(Radianes: number): void {
+    this.RollCamara = Number.isFinite(Radianes) ? Radianes : 0;
+  }
+
+  /** Actualiza Auto-Follow y vibración suave de cámara sobre el personaje activo. */
+  public ActualizarCamaraDinamica(Delta: number, Modelos?: GestorModelos): void {
+    this._TiempoCamara += Delta;
+    if (this.SeguimientoCamara !== 'Ninguno' && Modelos) {
+      const Hueso = this.SeguimientoCamara === 'Cabeza' ? 'head' : 'chest';
+      const Pos = Modelos.ObtenerPosicionMundoHueso(Hueso, Modelos.PersonajeActivoId, this._TargetSeguimiento);
+      if (Pos) {
+        const Factor = 1 - Math.exp(-Math.max(0.1, Delta) * 7.0);
+        this.Controles.target.lerp(Pos, Factor);
+      }
+    }
+  }
+
+  /** Controla la luz dedicada al personaje (independiente de la escena oscura). */
+  public EstablecerLuzPersonaje(Activa: boolean, Intensidad?: number, ColorHex?: string): void {
+    this.LuzPersonajeActiva = Activa;
+    if (Intensidad !== undefined) this.IntensidadLuzPersonaje = Intensidad;
+    if (this.LuzPersonaje) {
+      this.LuzPersonaje.visible = Activa;
+      this.LuzPersonaje.intensity = Activa ? this.IntensidadLuzPersonaje : 0;
+      if (ColorHex) this.LuzPersonaje.color.set(ColorHex);
+    }
+  }
+
   /** Renderiza un cuadro: usa el compositor si algún efecto está activo. */
   public Renderizar(): void {
     this.Controles.update();
+    if (Math.abs(this.RollCamara) > 1e-5) {
+      this.Camara.rotateZ(this.RollCamara);
+    }
+    if (this.VibracionCamara > 0.0005) {
+      const T = this._TiempoCamara;
+      const Amp = this.VibracionCamara * 0.02;
+      this.Camara.rotateX(Math.sin(T * 11.3) * Amp * 0.5);
+      this.Camara.rotateY(Math.cos(T * 8.7) * Amp * 0.6);
+      this.Camara.rotateZ(Math.sin(T * 14.1) * Amp);
+    }
     const UsarCompositor = this.BloomActivo || this.AberracionCromaticaActiva || this.RuidoActivo || this.VignetaActiva;
 
     if (UsarCompositor && this.Compositor) {

@@ -4,7 +4,87 @@
 // ============================================================================
 
 /** Objetivo que puede animar una pista de la línea de tiempo. */
-export type TipoObjetivoPista = 'HuesoRotacion' | 'HuesoPosicion' | 'Expresion' | 'Efecto' | 'Luz' | 'CamaraPosicion' | 'CamaraObjetivo' | 'CamaraFOV';
+export type TipoObjetivoPista =
+  | 'HuesoRotacion'
+  | 'HuesoPosicion'
+  | 'Expresion'
+  | 'Efecto'
+  | 'Luz'
+  | 'CamaraPosicion'
+  | 'CamaraObjetivo'
+  | 'CamaraFOV'
+  | 'CamaraRoll';
+
+/** Tipos de piso disponibles en el estudio. */
+export type TipoPiso = 'Rejilla' | 'Reflectivo' | 'Agua' | 'EscenarioNeon' | 'Ninguno';
+
+/** Tipos de cielo / cúpula de escena. */
+export type TipoCielo = 'Solido' | 'Dia' | 'Atardecer' | 'Noche' | 'EspacioDinamico' | 'Imagen360' | 'VideoFondo';
+
+/** Modo de auto-enfoque para Profundidad de Campo (DoF). */
+export type ModoAutoFocus = 'Manual' | 'CabezaActivo' | 'MultiPersonaje';
+
+/** Seguimiento automático del objetivo de cámara. */
+export type ModoSeguimientoCamara = 'Ninguno' | 'Cabeza' | 'Cuerpo';
+
+export interface ConfiguracionEntorno {
+  PresetId?: string;
+  Piso: TipoPiso;
+  ColorPiso: string;
+  TamanoPiso: number;
+  Cielo: TipoCielo;
+  ColorFondo: string;
+  NieblaActiva: boolean;
+  NieblaColor: string;
+  NieblaDensidad: number;
+  Exposicion?: number;
+}
+
+export interface ConfiguracionPostProceso {
+  DofActivo: boolean;
+  DofModoAutoFocus: ModoAutoFocus;
+  DofDistancia: number;
+  DofOffset: number;
+  DofApertura: number;
+  DofMaxBlur: number;
+  BloomActivo: boolean;
+  BloomFuerza: number;
+  BloomRadio: number;
+  BloomUmbral: number;
+  LensDirtActivo: boolean;
+  LensDirtTextura: string;
+  LensDirtIntensidad: number;
+  ColorGradingActivo: boolean;
+  Temperatura: number;
+  Tinte: number;
+  Saturacion: number;
+  Contraste: number;
+  VignetaActiva: boolean;
+  VignetaColor: string;
+  VignetaOscuridad: number;
+  AberracionActiva: boolean;
+  AberracionCantidad: number;
+  RuidoActivo: boolean;
+  RuidoIntensidad: number;
+  FxaaActivo: boolean;
+}
+
+export interface ConfiguracionLuzEscenario {
+  Id: string;
+  Nombre: string;
+  Activa: boolean;
+  Tipo: 'Spot' | 'Point';
+  Color: string;
+  Intensidad: number;
+  Posicion: [number, number, number];
+  Objetivo: [number, number, number];
+  AnguloDeg: number;
+  Alcance: number;
+  Volumetrica: boolean;
+  OpacidadHaz: number;
+  SeguirPersonaje: boolean;
+  AutoRotarVelocidad: number;
+}
 
 /** Origen de una pista; define el color y la prioridad de aplicación. */
 export type GrupoPista = 'Manual' | 'Preajuste' | 'Importado' | 'SeguimientoCuerpo' | 'SeguimientoRostro' | 'GrabacionVMC';
@@ -27,6 +107,7 @@ export interface PistaAnimacion {
   Tipo: TipoObjetivoPista;
   Objetivo: string;        // Nombre del hueso humanoide (p. ej. "leftUpperArm") o de la expresión
   Grupo: GrupoPista;
+  PersonajeId?: string;    // Opcional para pistas multi-VRM; indefinido = personaje principal
   Claves: ClaveAnimacion[];
   Silenciada?: boolean;
   Bloqueada?: boolean;
@@ -54,6 +135,13 @@ export interface OpcionesImportacionAnimacion {
   Simplificar: boolean;
   ToleranciaSimplificacion: number;
   GrupoDestino: GrupoPista;
+  PersonajeId?: string;
+  UsarFootIK?: boolean;
+  AutoRetargetAPose?: boolean;
+  IntegrarTwist?: boolean;
+  EscalaPosicionVmd?: number;
+  IncluirCamaraVmd?: boolean;
+  IncluirLucesVmd?: boolean;
 }
 
 /** Resultado completo producido por un importador de animaciones. */
@@ -106,6 +194,9 @@ export interface DatosProyecto {
   BloomFuerza: number;
   TipoParticulas: string;
   CantidadParticulas: number;
+  Entorno?: ConfiguracionEntorno;
+  PostProceso?: ConfiguracionPostProceso;
+  LucesEscenario?: ConfiguracionLuzEscenario[];
 }
 
 /** Resoluciones de exportación disponibles (hasta 4K UHD). */

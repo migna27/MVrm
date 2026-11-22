@@ -381,7 +381,7 @@ export class InspectorClave {
       document.createTextNode(' Sobrescribir con estado 3D actual')
     );
     BtnSobrescribir.onclick = () => {
-      const ValorActual = Anim.ObtenerValorActualObjetivo(Pista.Tipo, Pista.Objetivo);
+      const ValorActual = Anim.ObtenerValorActualObjetivo(Pista.Tipo, Pista.Objetivo, Pista.PersonajeId);
       if (!ValorActual) {
         this.Contexto.NotificarEstado('No hay datos activos para sobrescribir este objetivo.', 'aviso');
         return;
@@ -402,7 +402,8 @@ export class InspectorClave {
     BtnDuplicar.onclick = () => {
       const Cmd = new ComandoGuardarClave(
         Anim, Pista.Tipo, Pista.Objetivo, Pista.Grupo,
-        Anim.TiempoActual, [...Clave.Valor], Clave.Interpolacion ?? 'Suave'
+        Anim.TiempoActual, [...Clave.Valor], Clave.Interpolacion ?? 'Suave',
+        undefined, Pista.PersonajeId
       );
       this.Contexto.Historial.Ejecutar(Cmd);
       Estado.SeleccionarUna(Pista.Id, Cmd.ClaveResultanteId);
