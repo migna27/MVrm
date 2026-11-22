@@ -42,7 +42,7 @@ user/
 .node/
 tracker/python_portable/
 tracker/models/
-
+other/
 # Python cache
 __pycache__/
 *.pyc
