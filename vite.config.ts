@@ -157,6 +157,14 @@ function localAssetsPlugin() {
             poses: [
               ...getFiles('public/assets/poses').map(f => ({ path: `/assets/poses/${f}`, name: f, isUser: false })),
               ...getFiles('user/poses').map(f => ({ path: `/user/poses/${f}`, name: f, isUser: true }))
+            ],
+            props: [
+              ...getFiles('public/assets/props').map(f => ({ path: `/assets/props/${f}`, name: f, isUser: false })),
+              ...getFiles('user/props').map(f => ({ path: `/user/props/${f}`, name: f, isUser: true }))
+            ],
+            textures: [
+              ...getFiles('public/assets/textures').map(f => ({ path: `/assets/textures/${f}`, name: f, isUser: false })),
+              ...getFiles('user/textures').map(f => ({ path: `/user/textures/${f}`, name: f, isUser: true }))
             ]
           };
 
@@ -166,7 +174,7 @@ function localAssetsPlugin() {
         }
 
         if (req.url === '/api/upload' && req.method === 'POST') {
-          const CATEGORIAS_VALIDAS = new Set(['models', 'animations', 'poses', 'videos']);
+          const CATEGORIAS_VALIDAS = new Set(['models', 'animations', 'poses', 'videos', 'props', 'textures']);
           const form = new multiparty.Form();
           form.parse(req, (err: any, fields: any, files: any) => {
             if (err) {

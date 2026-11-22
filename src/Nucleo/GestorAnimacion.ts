@@ -433,7 +433,18 @@ export class GestorAnimacion {
         if (Objetivo === 'Exposicion') return [this.Escena.Renderer.toneMappingExposure];
         if (Objetivo === 'LuzDireccional') return [this.Escena.LuzDireccional.intensity];
         if (Objetivo === 'LuzAmbiental') return [this.Escena.LuzAmbiental.intensity];
+        if (Objetivo === 'LuzPersonaje') return [this.Escena.IntensidadLuzPersonaje];
         if (Objetivo === 'BloomFuerza') return [this.Escena.BloomFuerza];
+        if (Objetivo === 'DofApertura') return [this.Escena.DofApertura];
+        if (Objetivo === 'DofDistancia') return [this.Escena.DofDistancia];
+        if (Objetivo === 'Temperatura') return [this.Escena.Temperatura];
+        if (Objetivo === 'Saturacion') return [this.Escena.Saturacion];
+        if (Objetivo === 'Contraste') return [this.Escena.Contraste];
+        if (Objetivo === 'LensDirtIntensidad') return [this.Escena.LensDirtIntensidad];
+        if (Objetivo === 'NieblaDensidad') {
+          const Fog = this.Escena.Escena.fog as THREE.FogExp2 | null;
+          return [Fog?.density ?? 0];
+        }
         if (this._UltimosValoresEfectos.has(Objetivo)) {
           return [this._UltimosValoresEfectos.get(Objetivo)!];
         }
@@ -447,7 +458,7 @@ export class GestorAnimacion {
           BloomUmbral: 0.85,
           RGBShift: 0.0025,
           RuidoIntensidad: 0.35,
-          VignetaOscuridad: 1.2
+          VignetaOscuridad: 0.45
         };
         return [Defecto[Objetivo] ?? 0];
       }
@@ -745,12 +756,24 @@ export class GestorAnimacion {
       case 'Exposicion': this.Escena.EstablecerExposicion(Valor); break;
       case 'LuzDireccional': this.Escena.EstablecerLuzDireccional(Valor); break;
       case 'LuzAmbiental': this.Escena.EstablecerLuzAmbiental(Valor); break;
+      case 'LuzPersonaje': this.Escena.EstablecerLuzPersonaje(this.Escena.LuzPersonajeActiva, Valor); break;
       case 'BloomFuerza':
         this.Escena.BloomFuerza = Valor;
         this.Escena.EstablecerBloom(this.Escena.BloomActivo, Valor);
         break;
       case 'BloomRadio': this.Escena.EstablecerBloom(this.Escena.BloomActivo, undefined, Valor); break;
       case 'BloomUmbral': this.Escena.EstablecerBloom(this.Escena.BloomActivo, undefined, undefined, Valor); break;
+      case 'DofApertura': this.Escena.EstablecerDOF(this.Escena.DofActivo, { Apertura: Valor }); break;
+      case 'DofDistancia': this.Escena.EstablecerDOF(this.Escena.DofActivo, { Distancia: Valor }); break;
+      case 'Temperatura': this.Escena.EstablecerColorGrading(this.Escena.ColorGradingActivo, { Temperatura: Valor }); break;
+      case 'Saturacion': this.Escena.EstablecerColorGrading(this.Escena.ColorGradingActivo, { Saturacion: Valor }); break;
+      case 'Contraste': this.Escena.EstablecerColorGrading(this.Escena.ColorGradingActivo, { Contraste: Valor }); break;
+      case 'LensDirtIntensidad': this.Escena.EstablecerLensDirt(this.Escena.LensDirtActivo, undefined, Valor); break;
+      case 'NieblaDensidad': {
+        const Fog = this.Escena.Escena.fog as THREE.FogExp2 | null;
+        if (Fog) Fog.density = Math.max(0, Valor);
+        break;
+      }
       case 'RGBShift': this.Escena.EstablecerAberracionCromatica(this.Escena.AberracionCromaticaActiva, Valor); break;
       case 'RuidoIntensidad': this.Escena.EstablecerRuido(this.Escena.RuidoActivo, Valor); break;
       case 'VignetaOscuridad': this.Escena.EstablecerVigneta(this.Escena.VignetaActiva, Valor); break;
