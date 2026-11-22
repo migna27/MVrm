@@ -1,6 +1,23 @@
-# Animador VRM (v1.2.1)
+# Animador VRM (v2.0.0)
 
-Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con arquitectura desacoplada por eventos y un flujo de trabajo profesional de estudio oscuro (paneles con pestañas, visor 3D con barra flotante y línea de tiempo optimizada) para crear animaciones fluidas, gestionar *keyframes* con historial reversible y exportar videos hasta resolución 4K.
+Estudio cinematográfico de animación 3D en el navegador para modelos **VRM**. Diseñado con arquitectura desacoplada por eventos y flujo de trabajo profesional (Multi-VRM, importación directa de `.vmd` a keyframes editables, entornos procedurales con reflejos y agua, iluminación volumétrica, props adjuntos a huesos, lip-sync automático desde audio y exportación hasta 4K).
+
+## Novedades en v2.0.0
+
+- **Importador Nativo de `.vmd` Directo a Keyframes Editables:** Lectura binaria directa de archivos MikuMikuDance (`.vmd` en Shift-JIS) sin herramientas `.exe` externas:
+  - Huesos del cuerpo, ojos y dedos completos con soporte de torsión/huesos semi-estándar (`腕捩`, `手捩`, `左肩P`, `腰`), auto-retarget A-Pose → T-Pose (`±30°`) y resolvedor analítico Two-Bone Foot IK opcional.
+  - Expresiones faciales (`morphs`), cámara MMD (con detección de cortes por escalón) y luz direccional importadas como pistas totalmente editables en la línea de tiempo.
+- **Producción Multi-VRM y Control de Escena Directo:**
+  - Reparto de múltiples personajes VRM simultáneos en escena con pista aislada por personaje (`PersonajeId`), selección 3D al hacer clic en sus huesos y reasignación inteligente al cargar proyectos.
+  - **Lip-Sync Automático desde Audio (`MotorLipSync`):** Análisis espectral por banco de filtros Goertzel sobre bandas formánticas F1/F2 (`aa`, `ih`, `ou`, `ee`, `oh`) con simplificación y deshacer en un clic (`Ctrl+Z`).
+  - **Props 3D (`.glb`/`.gltf`) Adjuntos a Huesos + Gizmo (`W`/`E`/`S`):** Catálogo integrado y carga local de accesorios adjuntables a cualquier hueso VRM, con brillo HDR para Bloom y animaciones embebidas.
+  - **Modo Cine (`Shift+F` / `Esc`):** Oculta barras y paneles al instante para previsualización a pantalla completa sin distracciones.
+- **Entornos Procedurales, Post-Proceso Cine y Compatibilidad VRMLiveViewer:**
+  - 5 preajustes en 1 clic (`Estudio Oscuro`, `Espacio Reflectivo`, `Noche Concierto`, `Atardecer Agua`, `Neón 5 Focos`).
+  - Pisos `Reflector` y `Water` animada con normales procedurales, cielos `Sky` (Día/Atardecer/Noche), campo estelar GLSL `EspacioDinamico`, fondos equirectangulares 360° y video sincronizado, más niebla exponencial animable.
+  - Compositor unificado: `BokehPass` con **Auto-Focus** (`CabezaActivo` / `MultiPersonaje`), `ShaderGradoCine` (Temperatura, Tinte, Saturación, Contraste, Viñeta coloreada y **Lens Dirt**), Bloom HDR, aberración cromática, grano y FXAA.
+  - **Focos Volumétricos de Escenario (`SpotLight` / `PointLight`):** Conos Fresnel aditivos, rotación automática, seguimiento al VRM y posicionamiento directo con el Gizmo.
+  - **Partículas HDR Multi-Capa (`KiraKira`, `SakuraGlow`, `Estrellas`, etc.):** Múltiples capas simultáneas anclables a huesos específicos e importador directo de `.json` (`Environment`, `PostEffect`, `CustomLight`) de *VRM Live Viewer*.
 
 ## Novedades en v1.2.1
 
