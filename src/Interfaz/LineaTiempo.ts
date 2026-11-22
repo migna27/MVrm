@@ -32,7 +32,9 @@ type ModoArrastre =
   | 'SeleccionCaja'
   | 'Paneo'
   | 'BucleInicio'
-  | 'BucleFin';
+  | 'BucleFin'
+  | 'ScrollV'
+  | 'ScrollH';
 
 export interface ObjetivoContextoTimeline {
   Tipo: 'clave' | 'pista' | 'grupo' | 'vacio';
@@ -112,6 +114,7 @@ export class LineaTiempo {
   private SeMovioEnArrastre = false;
   private AltEnArrastre = false;
   private HoverClave: HoverInfo | null = null;
+  private HoverClaveFirma = '';
 
   constructor(private Lienzo: HTMLCanvasElement, private Contexto: ContextoAplicacion) {
     this.Contexto2D = Lienzo.getContext('2d')!;
@@ -428,6 +431,29 @@ export class LineaTiempo {
 
       if (E.button !== 0) return;
 
+      // 0. Clic en barras de desplazamiento del canvas
+      const Scrolls = this.CalcularScrollbars(this.Lienzo.clientWidth, this.Lienzo.clientHeight);
+      if (Scrolls.TrackV && X >= Scrolls.TrackV.X - 3 && X <= Scrolls.TrackV.X + Scrolls.TrackV.W + 3 && Y >= Scrolls.TrackV.Y && Y <= Scrolls.TrackV.Y + Scrolls.TrackV.H) {
+        if (!Scrolls.RectV || Y < Scrolls.RectV.Y || Y > Scrolls.RectV.Y + Scrolls.RectV.H) {
+          const Ratio = Limitar((Y - Scrolls.TrackV.Y - (Scrolls.RectV?.H ?? 24) / 2) / Math.max(1, Scrolls.TrackV.H - (Scrolls.RectV?.H ?? 24)), 0, 1);
+          this.DesplazamientoY = Ratio * Scrolls.MaxY;
+        }
+        this.Modo = 'ScrollV';
+        this.DespInicioY = this.DesplazamientoY;
+        this.SolicitarDibujo();
+        return;
+      }
+      if (Scrolls.TrackH && Y >= Scrolls.TrackH.Y - 3 && Y <= Scrolls.TrackH.Y + Scrolls.TrackH.H + 3 && X >= Scrolls.TrackH.X && X <= Scrolls.TrackH.X + Scrolls.TrackH.W) {
+        if (!Scrolls.RectH || X < Scrolls.RectH.X || X > Scrolls.RectH.X + Scrolls.RectH.W) {
+          const Ratio = Limitar((X - Scrolls.TrackH.X - (Scrolls.RectH?.W ?? 28) / 2) / Math.max(1, Scrolls.TrackH.W - (Scrolls.RectH?.W ?? 28)), 0, 1);
+          this.DesplazamientoX = Ratio * Scrolls.MaxX;
+        }
+        this.Modo = 'ScrollH';
+        this.DespInicioX = this.DesplazamientoX;
+        this.SolicitarDibujo();
+        return;
+      }
+
       // 1. Clic dentro de la columna de cabeceras izquierda
       if (X <= ANCHO_ETIQUETAS) {
         this.ManejarClicCabecera(X, Y);
@@ -539,13 +565,36 @@ export class LineaTiempo {
         this.SeMovioEnArrastre = true;
       }
 
+      if (this.Modo === 'ScrollV') {
+        const Scrolls = this.CalcularScrollbars(this.Lienzo.clientWidth, this.Lienzo.clientHeight);
+        if (Scrolls.TrackV && Scrolls.RectV && Scrolls.MaxY > 0) {
+          const Recorrido = Math.max(1, Scrolls.TrackV.H - Scrolls.RectV.H);
+          this.DesplazamientoY = Limitar(this.DespInicioY + ((Y - this.MouseInicioY) / Recorrido) * Scrolls.MaxY, 0, Scrolls.MaxY);
+          this.SolicitarDibujo();
+        }
+        return;
+      }
+
+      if (this.Modo === 'ScrollH') {
+        const Scrolls = this.CalcularScrollbars(this.Lienzo.clientWidth, this.Lienzo.clientHeight);
+        if (Scrolls.TrackH && Scrolls.RectH && Scrolls.MaxX > 0) {
+          const Recorrido = Math.max(1, Scrolls.TrackH.W - Scrolls.RectH.W);
+          this.DesplazamientoX = Limitar(this.DespInicioX + ((X - this.MouseInicioX) / Recorrido) * Scrolls.MaxX, 0, Scrolls.MaxX);
+          this.SolicitarDibujo();
+        }
+        return;
+      }
+
       if (this.Modo === 'Buscar') {
+        if (X > this.Lienzo.clientWidth - 24) this.DesplazamientoX += 14;
+        else if (X < ANCHO_ETIQUETAS + 24 && X > ANCHO_ETIQUETAS - 30) this.DesplazamientoX = Math.max(0, this.DesplazamientoX - 14);
         const T = Limitar(this.PixelesATiempo(X), 0, Anim.Duracion);
         Anim.EstablecerTiempo(T, 'usuario');
         Anim.EvaluarEn(Anim.TiempoActual);
         this.SolicitarDibujo();
       } else if (this.Modo === 'Paneo') {
-        this.DesplazamientoX = Math.max(0, this.DespInicioX - (X - this.MouseInicioX));
+        const MaxX = this.ObtenerMaxDesplazamientoX(this.Lienzo.clientWidth);
+        this.DesplazamientoX = Limitar(this.DespInicioX - (X - this.MouseInicioX), 0, MaxX);
         const MaxY = Math.max(0, this.AlturaTotal() - this.Lienzo.clientHeight);
         this.DesplazamientoY = Limitar(this.DespInicioY - (Y - this.MouseInicioY), 0, MaxY);
         this.SolicitarDibujo();
@@ -559,6 +608,9 @@ export class LineaTiempo {
         this.SolicitarDibujo();
       } else if (this.Modo === 'MoverClaves') {
         if (!this.SeMovioEnArrastre) return;
+
+        if (X > this.Lienzo.clientWidth - 24) this.DesplazamientoX += 14;
+        else if (X < ANCHO_ETIQUETAS + 24 && X > ANCHO_ETIQUETAS - 30) this.DesplazamientoX = Math.max(0, this.DesplazamientoX - 14);
 
         // Duplicado bajo Alt+Arrastre en cuanto comienza un desplazamiento real
         if (this.AltEnArrastre && !this.DuplicadoEnCurso) {
@@ -630,7 +682,8 @@ export class LineaTiempo {
         this.AlCambiarZoom?.(this.PxPorSegundo);
       } else if (E.shiftKey || Math.abs(E.deltaX) > Math.abs(E.deltaY)) {
         const Delta = Math.abs(E.deltaX) > 0 ? E.deltaX : E.deltaY;
-        this.DesplazamientoX = Math.max(0, this.DesplazamientoX + Delta);
+        const MaxX = this.ObtenerMaxDesplazamientoX(this.Lienzo.clientWidth);
+        this.DesplazamientoX = Limitar(this.DesplazamientoX + Delta, 0, MaxX);
       } else {
         const MaxY = Math.max(0, this.AlturaTotal() - this.Lienzo.clientHeight);
         this.DesplazamientoY = Limitar(this.DesplazamientoY + E.deltaY, 0, MaxY);
@@ -877,10 +930,40 @@ export class LineaTiempo {
     Estado?.EstablecerSeleccion(NuevasSelecciones);
   }
 
+  private DeduplicarColisionesArrastre(): void {
+    const Anim = this.Contexto.Animacion;
+    const MovidasPorPista = new Map<string, Set<string>>();
+    for (const M of this.MovimientosActivos) {
+      let S = MovidasPorPista.get(M.PistaId);
+      if (!S) { S = new Set(); MovidasPorPista.set(M.PistaId, S); }
+      S.add(M.ClaveId);
+    }
+
+    let HuboCambios = false;
+    for (const [PistaId, MovidasIds] of MovidasPorPista) {
+      const Pista = Anim.Pistas.find((P) => P.Id === PistaId);
+      if (!Pista) continue;
+      const TiemposMovidos = Pista.Claves.filter((C) => MovidasIds.has(C.Id)).map((C) => C.Tiempo);
+      if (TiemposMovidos.length === 0) continue;
+
+      const Antes = Pista.Claves.length;
+      Pista.Claves = Pista.Claves.filter((C) =>
+        MovidasIds.has(C.Id) || !TiemposMovidos.some((TM) => Math.abs(C.Tiempo - TM) < 0.004)
+      );
+      if (Pista.Claves.length !== Antes) HuboCambios = true;
+    }
+
+    if (HuboCambios) {
+      Anim.NotificarCambioPistas('deduplicar-claves');
+    }
+  }
+
   private FinalizarArrastreClaves(): void {
     const Anim = this.Contexto.Animacion;
+    this.DeduplicarColisionesArrastre();
+
     if (this.DuplicadoEnCurso && this.PistasAntesDuplicado) {
-      // Registrar clonación como comando atómico mediante lote/importación ligera usando snapshot
+      // Registrar clonación como comando atómico mediante snapshot
       const PistasDespues = Anim.Pistas.map((P) => ({
         ...P,
         Claves: P.Claves.map((C) => ({ ...C, Valor: [...C.Valor] }))
@@ -948,29 +1031,45 @@ export class LineaTiempo {
   }
 
   private ActualizarHover(X: number, Y: number): void {
+    const Ancho = this.Lienzo.clientWidth;
+    const Alto = this.Lienzo.clientHeight;
+    if (X < 0 || Y < 0 || X > Ancho || Y > Alto) {
+      if (this.HoverClave !== null) {
+        this.HoverClave = null;
+        this.HoverClaveFirma = '';
+        this.SolicitarDibujo();
+      }
+      return;
+    }
+
     const ClaveRef = X > ANCHO_ETIQUETAS && Y > ALTO_REGLA ? this.BuscarClaveEn(X, Y) : null;
     if (ClaveRef) {
       const Pista = this.Contexto.Animacion.Pistas.find((P) => P.Id === ClaveRef.PistaId);
       const Clave = Pista?.Claves.find((C) => C.Id === ClaveRef.ClaveId);
       if (Pista && Clave) {
-        const Resumen = Clave.Valor.length === 1
-          ? Clave.Valor[0].toFixed(2)
-          : `${Clave.Valor.map((V) => V.toFixed(2)).join(', ')}`;
-        this.HoverClave = {
-          X, Y,
-          PistaNombre: Pista.Nombre,
-          Tiempo: Clave.Tiempo,
-          Interpolacion: Clave.Interpolacion ?? 'Suave',
-          ResumenValor: Resumen
-        };
+        const Firma = `${Pista.Id}|${Clave.Id}|${Clave.Tiempo.toFixed(3)}|${Clave.Interpolacion ?? 'Suave'}`;
+        if (this.HoverClaveFirma !== Firma) {
+          const Resumen = Clave.Valor.length === 1
+            ? Clave.Valor[0].toFixed(2)
+            : `${Clave.Valor.map((V) => V.toFixed(2)).join(', ')}`;
+          this.HoverClave = {
+            X, Y,
+            PistaNombre: Pista.Nombre,
+            Tiempo: Clave.Tiempo,
+            Interpolacion: Clave.Interpolacion ?? 'Suave',
+            ResumenValor: Resumen
+          };
+          this.HoverClaveFirma = Firma;
+          this.SolicitarDibujo();
+        }
         this.Lienzo.style.cursor = 'grab';
-        this.SolicitarDibujo();
         return;
       }
     }
 
     if (this.HoverClave !== null) {
       this.HoverClave = null;
+      this.HoverClaveFirma = '';
       this.SolicitarDibujo();
     }
 
@@ -1062,6 +1161,17 @@ export class LineaTiempo {
     C.setTransform(Dpr, 0, 0, Dpr, 0, 0);
 
     const Anim = this.Contexto.Animacion;
+    // Seguimiento automático horizontal del cabezal durante la reproducción
+    if (Anim.Reproduciendo && this.Modo === 'Ninguno') {
+      const XCabezal = this.TiempoAPixeles(Anim.TiempoActual);
+      if (XCabezal > Ancho - 24) {
+        const MaxX = this.ObtenerMaxDesplazamientoX(Ancho);
+        this.DesplazamientoX = Limitar(Anim.TiempoActual * this.PxPorSegundo - 32, 0, MaxX);
+      } else if (XCabezal < ANCHO_ETIQUETAS + 4 && this.DesplazamientoX > 0) {
+        this.DesplazamientoX = Math.max(0, Anim.TiempoActual * this.PxPorSegundo - 24);
+      }
+    }
+
     const Filas = this.AsegurarFilasCache();
     const TInicio = Math.max(0, this.PixelesATiempo(ANCHO_ETIQUETAS));
     const TFin = this.PixelesATiempo(Ancho);
@@ -1131,10 +1241,81 @@ export class LineaTiempo {
     C.stroke();
 
     this.DibujarEtiquetas(C, Filas, Alto);
+    this.DibujarScrollbars(C, Ancho, Alto);
 
     // Tooltip flotante sobre clave
     if (this.HoverClave && this.Modo === 'Ninguno') {
       this.DibujarTooltipClave(C, this.HoverClave, Ancho, Alto);
+    }
+  }
+
+  private ObtenerMaxDesplazamientoX(Ancho: number): number {
+    const AnchoTemporal = Math.max(1, Ancho - ANCHO_ETIQUETAS);
+    const AnchoTotalH = Math.max(AnchoTemporal, this.Contexto.Animacion.Duracion * this.PxPorSegundo + 60);
+    return Math.max(0, AnchoTotalH - AnchoTemporal);
+  }
+
+  private CalcularScrollbars(Ancho: number, Alto: number): {
+    TrackV: { X: number; Y: number; W: number; H: number } | null;
+    RectV: { X: number; Y: number; W: number; H: number } | null;
+    MaxY: number;
+    TrackH: { X: number; Y: number; W: number; H: number } | null;
+    RectH: { X: number; Y: number; W: number; H: number } | null;
+    MaxX: number;
+  } {
+    const TotalV = this.AlturaTotal();
+    const MaxY = Math.max(0, TotalV - Alto);
+    let TrackV = null;
+    let RectV = null;
+    if (MaxY > 1 && Alto > ALTO_REGLA + 32) {
+      const H = Alto - ALTO_REGLA - 18;
+      TrackV = { X: Ancho - 10, Y: ALTO_REGLA + 4, W: 7, H };
+      const ThumbH = Math.max(24, (Alto / TotalV) * H);
+      const ThumbY = TrackV.Y + (Limitar(this.DesplazamientoY, 0, MaxY) / MaxY) * (H - ThumbH);
+      RectV = { X: TrackV.X, Y: ThumbY, W: 7, H: ThumbH };
+    }
+
+    const AnchoTemporal = Math.max(1, Ancho - ANCHO_ETIQUETAS);
+    const MaxX = this.ObtenerMaxDesplazamientoX(Ancho);
+    const MostrarH = MaxX > 16 || this.DesplazamientoX > 2;
+    let TrackH = null;
+    let RectH = null;
+    if (MostrarH && AnchoTemporal > 48) {
+      const W = AnchoTemporal - 20;
+      TrackH = { X: ANCHO_ETIQUETAS + 6, Y: Alto - 10, W, H: 7 };
+      const AnchoTotalH = AnchoTemporal + MaxX;
+      const ThumbW = Math.max(28, (AnchoTemporal / AnchoTotalH) * W);
+      const Ratio = MaxX > 0 ? Limitar(this.DesplazamientoX, 0, MaxX) / MaxX : 0;
+      const ThumbX = TrackH.X + Ratio * (W - ThumbW);
+      RectH = { X: ThumbX, Y: TrackH.Y, W: ThumbW, H: 7 };
+    }
+
+    return { TrackV, RectV, MaxY, TrackH, RectH, MaxX };
+  }
+
+  private DibujarScrollbars(C: CanvasRenderingContext2D, Ancho: number, Alto: number): void {
+    const S = this.CalcularScrollbars(Ancho, Alto);
+    if (S.TrackV && S.RectV) {
+      C.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      C.beginPath();
+      C.roundRect(S.TrackV.X, S.TrackV.Y, S.TrackV.W, S.TrackV.H, 4);
+      C.fill();
+
+      C.fillStyle = this.Modo === 'ScrollV' ? 'rgba(76, 201, 255, 0.78)' : 'rgba(147, 160, 184, 0.45)';
+      C.beginPath();
+      C.roundRect(S.RectV.X, S.RectV.Y, S.RectV.W, S.RectV.H, 4);
+      C.fill();
+    }
+    if (S.TrackH && S.RectH) {
+      C.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      C.beginPath();
+      C.roundRect(S.TrackH.X, S.TrackH.Y, S.TrackH.W, S.TrackH.H, 4);
+      C.fill();
+
+      C.fillStyle = this.Modo === 'ScrollH' ? 'rgba(76, 201, 255, 0.78)' : 'rgba(147, 160, 184, 0.45)';
+      C.beginPath();
+      C.roundRect(S.RectH.X, S.RectH.Y, S.RectH.W, S.RectH.H, 4);
+      C.fill();
     }
   }
 
