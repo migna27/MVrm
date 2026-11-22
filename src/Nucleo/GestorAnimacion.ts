@@ -949,6 +949,24 @@ export class GestorAnimacion {
     this.NotificarCambioPistas('limpiar');
   }
 
+  public ReasignarPersonajesFaltantes(): number {
+    const Activo = this.Modelos.PersonajeActivoId;
+    if (!Activo) return 0;
+    const IdsValidos = new Set(this.Modelos.Personajes.map((P) => P.Id));
+    let Modificadas = 0;
+    for (const Pista of this._Pistas) {
+      if (
+        (Pista.Tipo === 'HuesoRotacion' || Pista.Tipo === 'HuesoPosicion' || Pista.Tipo === 'Expresion') &&
+        (!Pista.PersonajeId || !IdsValidos.has(Pista.PersonajeId))
+      ) {
+        Pista.PersonajeId = Activo;
+        Modificadas++;
+      }
+    }
+    if (Modificadas > 0) this._PistasSucias = true;
+    return Modificadas;
+  }
+
   public ObtenerDatosProyecto(): Partial<DatosProyecto> {
     return { Version: 1, Duracion: this.Duracion, Pistas: this._Pistas };
   }

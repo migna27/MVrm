@@ -115,8 +115,11 @@ export class GestorExportacion {
         // Actualizar tiempo interno directamente para evitar redibujados de la UI offline
         Contexto.Animacion.TiempoActual = T;
         Contexto.Animacion.EvaluarEn(T);
-        Contexto.Efectos.Actualizar(1 / Fps);
+        Contexto.Entorno?.Actualizar(T, 1 / Fps);
+        Contexto.Props?.Actualizar(1 / Fps, T);
+        Contexto.Efectos.Actualizar(1 / Fps, Contexto.Modelos);
         Contexto.Modelos.Actualizar(1 / Fps);
+        Escena.ActualizarCamaraDinamica(1 / Fps, Contexto.Modelos);
         Escena.Renderizar();
 
         const Cuadro = new VideoFrame(Lienzo, {

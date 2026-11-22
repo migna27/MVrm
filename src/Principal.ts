@@ -13,6 +13,8 @@ import { GestorAudio } from './Nucleo/GestorAudio';
 import { GestorEfectos, TipoParticulas } from './Nucleo/GestorEfectos';
 import { GestorExportacion } from './Nucleo/GestorExportacion';
 import { GestorVMC } from './Nucleo/GestorVMC';
+import { GestorEntorno } from './Nucleo/GestorEntorno';
+import { GestorProps } from './Nucleo/GestorProps';
 import { BusEventos } from './Arquitectura/BusEventos';
 import { HistorialComandos } from './Arquitectura/HistorialComandos';
 import { EstadoEstudio } from './Arquitectura/EstadoEstudio';
@@ -52,6 +54,8 @@ const Modelos = new GestorModelos(Escena.Escena);
 const Animacion = new GestorAnimacion(Modelos, Escena, Bus);
 const Audio = new GestorAudio();
 const Efectos = new GestorEfectos(Escena.Escena);
+const Entorno = new GestorEntorno(Escena, Bus);
+const Props = new GestorProps(Escena.Escena, Bus);
 const Exportador = new GestorExportacion();
 const Importador = new ServicioImportacion();
 const Notificaciones = new SistemaNotificaciones(Bus, Historial);
@@ -72,6 +76,8 @@ const Contexto: ContextoAplicacion = {
   Exportador,
   VMC: null as unknown as GestorVMC,
   Importador,
+  Entorno,
+  Props,
   NotificarEstado: (Mensaje, Tipo = 'info', PermitirDeshacer = false) => {
     Bus.Emitir('estado:notificar', { mensaje: Mensaje, tipo: Tipo, permitirDeshacer: PermitirDeshacer });
   },
@@ -212,6 +218,7 @@ const DeslizadorZoom = document.getElementById('DeslizadorZoom') as HTMLInputEle
 const BotonGizmoNinguno = document.getElementById('BotonGizmoNinguno') as HTMLButtonElement;
 const BotonGizmoMover = document.getElementById('BotonGizmoMover') as HTMLButtonElement;
 const BotonGizmoRotar = document.getElementById('BotonGizmoRotar') as HTMLButtonElement;
+const BotonGizmoEscalar = document.getElementById('BotonGizmoEscalar') as HTMLButtonElement;
 const BotonGizmoEspacio = document.getElementById('BotonGizmoEspacio') as HTMLButtonElement;
 const BotonEsqueletoVisor = document.getElementById('BotonEsqueletoVisor') as HTMLButtonElement;
 
@@ -244,6 +251,7 @@ function SincronizarBotonesGizmo(): void {
   BotonGizmoNinguno.setAttribute('aria-pressed', String(!TieneObj));
   BotonGizmoMover.setAttribute('aria-pressed', String(TieneObj && Modo === 'translate'));
   BotonGizmoRotar.setAttribute('aria-pressed', String(TieneObj && Modo === 'rotate'));
+  BotonGizmoEscalar.setAttribute('aria-pressed', String(TieneObj && Modo === 'scale'));
   const EsMundo = Escena.ControlTransformacion.space === 'world';
   BotonGizmoEspacio.setAttribute('aria-pressed', String(EsMundo));
   BotonGizmoEspacio.textContent = EsMundo ? 'Mundo R' : 'Local R';
@@ -443,6 +451,14 @@ BotonGizmoRotar.onclick = () => {
   Escena.ControlTransformacion.setMode('rotate');
   SincronizarBotonesGizmo();
 };
+BotonGizmoEscalar.onclick = () => {
+  if (!Escena.ControlTransformacion.object && Props.PropActivoId) {
+    const Prop = Props.ObtenerProp(Props.PropActivoId);
+    if (Prop) Escena.ControlTransformacion.attach(Prop.Objeto);
+  }
+  Escena.ControlTransformacion.setMode('scale');
+  SincronizarBotonesGizmo();
+};
 BotonGizmoEspacio.onclick = () => {
   Escena.ControlTransformacion.setSpace(Escena.ControlTransformacion.space === 'local' ? 'world' : 'local');
   SincronizarBotonesGizmo();
@@ -582,19 +598,49 @@ document.getElementById('Visor3D')!.addEventListener('mousedown', (E) => {
       Estado.HuesoSeleccionado = NombreHueso;
       SincronizarBotonesGizmo();
     }
+    return;
+  }
+
+  const ListaProps = Props.ObtenerProps();
+  if (ListaProps.length > 0) {
+    const HitsProp = Raycaster.intersectObjects(ListaProps.map((P) => P.Objeto), true);
+    if (HitsProp.length > 0) {
+      const Prop = Props.BuscarPropPorObjeto(HitsProp[0].object);
+      if (Prop) {
+        Props.SeleccionarProp(Prop.Id);
+        Escena.ControlTransformacion.attach(Prop.Objeto);
+        SincronizarBotonesGizmo();
+      }
+    }
   }
 });
 
 Escena.ControlTransformacion.addEventListener('change', () => {
-  if (Escena.ControlTransformacion.object) {
+  const Obj = Escena.ControlTransformacion.object;
+  if (!Obj) return;
+  const Luz = Escena.BuscarLuzPorObjeto(Obj);
+  if (Luz) {
+    Luz.Config.Posicion = [Obj.position.x, Obj.position.y, Obj.position.z];
+    return;
+  }
+  if (!Props.BuscarPropPorObjeto(Obj)) {
     Panel.SincronizarDeslizadoresHueso();
   }
 });
 
 Escena.ControlTransformacion.addEventListener('dragging-changed', (E) => {
   if (E.value) return; // Solo grabamos al finalizar el arrastre del gizmo
-  if (!Estado.AutoClave || !Modelos.Vrm || !Escena.ControlTransformacion.object) return;
   const Obj = Escena.ControlTransformacion.object;
+  if (!Obj) return;
+  if (Escena.BuscarLuzPorObjeto(Obj)) {
+    Bus.Emitir('luces:cambiadas', {});
+    return;
+  }
+  if (Props.BuscarPropPorObjeto(Obj)) {
+    Bus.Emitir('props:cambiados', { cantidad: Props.ObtenerProps().length, activoId: Props.PropActivoId });
+    return;
+  }
+  if (!Estado.AutoClave || !Modelos.Vrm) return;
   const PersId = Modelos.PersonajeActivoId ?? undefined;
   const Nombre = Modelos.ObtenerHuesosDisponibles(PersId).find((N) => Modelos.ObtenerNodoHueso(N, PersId) === Obj);
   if (!Nombre) return;
@@ -892,7 +938,10 @@ document.getElementById('BotonGuardarProyecto')!.onclick = () => {
     BloomActivo: Escena.BloomActivo,
     BloomFuerza: Escena.BloomFuerza,
     TipoParticulas: Efectos.Tipo,
-    CantidadParticulas: Efectos.Cantidad
+    CantidadParticulas: Efectos.Cantidad,
+    Entorno: { ...Entorno.Config },
+    PostProceso: Escena.ObtenerConfigPostProceso(),
+    LucesEscenario: Escena.ObtenerConfigsLucesEscenario()
   };
   DescargarTexto(JSON.stringify(Datos, null, 2), 'Proyecto.animvrm.json');
   Contexto.NotificarEstado('Proyecto guardado. El modelo y audio se recargan aparte.', 'exito');
@@ -912,6 +961,10 @@ async function AbrirProyecto(Archivo: File): Promise<void> {
   if (Datos.TipoParticulas && Datos.TipoParticulas !== 'Ninguno') {
     Efectos.EstablecerParticulas(Datos.TipoParticulas as TipoParticulas, Datos.CantidadParticulas);
   }
+  if (Datos.Entorno) Entorno.AplicarConfig(Datos.Entorno);
+  if (Datos.PostProceso) Escena.AplicarConfigPostProceso(Datos.PostProceso);
+  if (Datos.LucesEscenario) Escena.AplicarLucesEscenario(Datos.LucesEscenario);
+  Animacion.ReasignarPersonajesFaltantes();
   Historial.Limpiar();
   Estado.LimpiarSeleccion();
   Animacion.NotificarCambioPistas('proyecto-abierto');
@@ -976,6 +1029,8 @@ ContenedorVisor.addEventListener('drop', async (E) => {
     if (Nombre.endsWith('.vrm')) {
       Escena.ControlTransformacion.detach();
       await Modelos.CargarVrm(Archivo);
+      Animacion.ReasignarPersonajesFaltantes();
+      Animacion.EvaluarEn(Animacion.TiempoActual);
       Panel.RefrescarDinamico();
       Bus.Emitir('personajes:cambiados', { cantidad: Modelos.Personajes.length, activoId: Modelos.PersonajeActivoId });
       Bus.Emitir('modelo:cargado', { nombre: Archivo.name });
@@ -985,18 +1040,26 @@ ContenedorVisor.addEventListener('drop', async (E) => {
       if (Nombre.endsWith('.vrma') || Nombre.endsWith('.vmd')) void SubirArchivoLocal(Archivo, 'animations');
       void ModalImp.AbrirConArchivo(Archivo);
     } else if (Nombre.endsWith('.glb') || Nombre.endsWith('.gltf')) {
-      Escena.EstablecerModeloFondo(await Modelos.CargarModeloFondo(Archivo));
-      Contexto.NotificarEstado(`Modelo de fondo cargado: ${Archivo.name}`, 'exito');
+      const Prop = await Props.CargarDesdeArchivo(Archivo, { Modelos });
+      Escena.ControlTransformacion.attach(Prop.Objeto);
+      Escena.ControlTransformacion.setMode('translate');
+      SincronizarBotonesGizmo();
+      Contexto.NotificarEstado(`Prop 3D cargado: ${Archivo.name}`, 'exito');
     } else if (Nombre.endsWith('.json')) {
       const Texto = await LeerArchivoTexto(Archivo);
-      const Datos = JSON.parse(Texto);
-      if (Datos.ColorFondo !== undefined || Nombre.includes('.animvrm.')) {
+      const PrimeraLinea = Texto.trim().split(/\r?\n/)[0] || '';
+      const PrimerObj = JSON.parse(PrimeraLinea);
+      if (PrimerObj.dataType === 'Environment' || PrimerObj.dataType === 'PostEffect' || PrimerObj.dataType === 'CustomLight') {
+        const Mensaje = Entorno.ImportarJsonVRMLV(Texto, Efectos);
+        Bus.Emitir('luces:cambiadas', {});
+        Contexto.NotificarEstado(Mensaje, 'exito');
+      } else if (PrimerObj.ColorFondo !== undefined || Nombre.includes('.animvrm.')) {
         await AbrirProyecto(Archivo);
-      } else if (Array.isArray(Datos.Pistas)) {
+      } else if (Array.isArray(PrimerObj.Pistas)) {
         void SubirArchivoLocal(Archivo, 'poses');
         void ModalImp.AbrirConArchivo(Archivo);
       } else {
-        throw new Error('JSON no reconocido como proyecto ni animación.');
+        throw new Error('JSON no reconocido como proyecto, entorno VRMLV ni animación.');
       }
     } else if (/\.(mp3|wav|ogg|m4a|flac)$/.test(Nombre)) {
       await Audio.Cargar(Archivo);
@@ -1129,6 +1192,13 @@ window.addEventListener('keydown', (E) => {
   } else if (Tecla === 'e') {
     Escena.ControlTransformacion.setMode('rotate');
     SincronizarBotonesGizmo();
+  } else if (Tecla === 's' && !Ctrl && !E.altKey) {
+    if (!Escena.ControlTransformacion.object && Props.PropActivoId) {
+      const Prop = Props.ObtenerProp(Props.PropActivoId);
+      if (Prop) Escena.ControlTransformacion.attach(Prop.Objeto);
+    }
+    Escena.ControlTransformacion.setMode('scale');
+    SincronizarBotonesGizmo();
   } else if (Tecla === 'r') {
     Escena.ControlTransformacion.setSpace(Escena.ControlTransformacion.space === 'local' ? 'world' : 'local');
     SincronizarBotonesGizmo();
@@ -1167,7 +1237,9 @@ function Bucle(Ahora: number): void {
     Linea.SolicitarDibujo();
   }
 
-  Efectos.Actualizar(Delta);
+  Entorno.Actualizar(Animacion.TiempoActual, Delta);
+  Props.Actualizar(Delta);
+  Efectos.Actualizar(Delta, Modelos);
   Modelos.Actualizar(Delta);
   Escena.ActualizarCamaraDinamica(Delta, Modelos);
   Escena.Renderizar();

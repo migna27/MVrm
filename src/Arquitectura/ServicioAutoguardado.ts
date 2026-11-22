@@ -110,6 +110,9 @@ export class ServicioAutoguardado {
       BloomFuerza: this.Contexto.Escena.BloomFuerza,
       TipoParticulas: this.Contexto.Efectos.Tipo,
       CantidadParticulas: this.Contexto.Efectos.Cantidad,
+      Entorno: this.Contexto.Entorno ? { ...this.Contexto.Entorno.Config } : undefined,
+      PostProceso: this.Contexto.Escena.ObtenerConfigPostProceso(),
+      LucesEscenario: this.Contexto.Escena.ObtenerConfigsLucesEscenario(),
       TiempoGuardadoMs: Date.now()
     };
 
@@ -130,7 +133,7 @@ export class ServicioAutoguardado {
       const Datos = JSON.parse(Crudo) as DatosAutoguardado;
       if (!Array.isArray(Datos.Pistas)) return false;
 
-      const { Animacion, Escena, Audio, Efectos, Historial, Estado, Bus } = this.Contexto;
+      const { Animacion, Escena, Audio, Efectos, Entorno, Historial, Estado, Bus } = this.Contexto;
       Animacion.Pistas = Datos.Pistas;
       Animacion.Duracion = Datos.Duracion ?? 10;
       Animacion.TiempoActual = 0;
@@ -142,7 +145,11 @@ export class ServicioAutoguardado {
       if (Datos.TipoParticulas && Datos.TipoParticulas !== 'Ninguno') {
         Efectos.EstablecerParticulas(Datos.TipoParticulas as TipoParticulas, Datos.CantidadParticulas);
       }
+      if (Datos.Entorno && Entorno) Entorno.AplicarConfig(Datos.Entorno);
+      if (Datos.PostProceso) Escena.AplicarConfigPostProceso(Datos.PostProceso);
+      if (Datos.LucesEscenario) Escena.AplicarLucesEscenario(Datos.LucesEscenario);
 
+      Animacion.ReasignarPersonajesFaltantes();
       Historial.Limpiar();
       Estado.LimpiarSeleccion();
       Animacion.NotificarCambioPistas('autoguardado-restaurado');

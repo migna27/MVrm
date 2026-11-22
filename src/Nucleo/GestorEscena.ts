@@ -429,6 +429,10 @@ export class GestorEscena {
     for (const Item of this.LucesEscenario) {
       if (!Item.Config.Activa) continue;
 
+      if (this.ControlTransformacion.object === Item.Luz) {
+        Item.Config.Posicion = [Item.Luz.position.x, Item.Luz.position.y, Item.Luz.position.z];
+      }
+
       if (Item.Config.AutoRotarVelocidad && Math.abs(Item.Config.AutoRotarVelocidad) > 1e-4) {
         const Ang = Item.Config.AutoRotarVelocidad * Delta;
         const Cos = Math.cos(Ang);
@@ -794,6 +798,11 @@ export class GestorEscena {
     if (!Instancia) return;
     Object.assign(Instancia.Config, Parcial);
     this.SincronizarHazSpotlight(Instancia);
+  }
+
+  public BuscarLuzPorObjeto(Obj: THREE.Object3D | null): InstanciaLuzEscenario | undefined {
+    if (!Obj) return undefined;
+    return this.LucesEscenario.find((L) => L.Luz === Obj);
   }
 
   public EliminarLuzEscenario(Id: string): void {

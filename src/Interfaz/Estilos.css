@@ -1296,6 +1296,44 @@
     border-color: var(--ColorAcento);
     color: var(--ColorAcento);
   }
+
+  .TarjetaMini {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 6px;
+    background: var(--ColorSuperficieOscura, rgba(15, 20, 32, 0.72));
+    border: 1px solid var(--ColorBorde);
+  }
+
+  .FilaCompacta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .FilaCompacta > input[type="color"] {
+    inline-size: 28px;
+    block-size: 24px;
+    padding: 1px;
+    border: 1px solid var(--ColorBorde);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .FilaCompacta > select {
+    flex: 1 1 90px;
+    min-inline-size: 0;
+  }
+
+  .ListaCompacta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 }
 
 /* --------------------------------------------------------------------------

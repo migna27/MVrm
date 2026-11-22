@@ -38,9 +38,10 @@ const GRUPOS_ATAJOS: GrupoAtajos[] = [
   {
     Titulo: 'Visor 3D y Cámaras',
     Filas: [
-      ['Q / W / E', 'Selección / Mover / Rotar hueso'],
+      ['Q / W / E / S', 'Selección / Mover / Rotar / Escalar props'],
       ['R', 'Alternar espacio Local / Mundo'],
       ['1 / 2 / 3 / 4', 'Cámaras: Frontal / 3/4 / Perfil / Rostro'],
+      ['Shift + F / Esc', 'Alternar Modo Cine (pantalla limpia)'],
       ['Arrastre en visor', 'Orbitar (izq), desplazar (der), zoom (rueda)']
     ]
   },
