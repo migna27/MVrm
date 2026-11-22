@@ -1,8 +1,24 @@
-# Animador VRM (v a-1.1.4)
+# Animador VRM (v1.2.0)
 
-Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con un flujo de trabajo profesional estilo edición de video (tres paneles interactivos) para crear animaciones fluidas, posar personajes y exportar videos hasta resolución 4K.
+Estudio de animación 3D en el navegador para modelos **VRM**. Diseñado con arquitectura desacoplada por eventos y un flujo de trabajo profesional de estudio oscuro (paneles con pestañas, visor 3D con barra flotante y línea de tiempo optimizada) para crear animaciones fluidas, gestionar *keyframes* con historial reversible y exportar videos hasta resolución 4K.
 
-## Características (v a-1.1.4)
+## Características (v1.2.0)
+
+- **Arquitectura Modular con Patrones de Diseño:**
+  - **Observer (`BusEventos`) y Store Reactivo (`EstadoEstudio`):** Desacoplan el motor 3D, la línea de tiempo y los paneles mediante eventos tipados (`pistas:cambiadas`, `tiempo:cambiado`, `seleccion:cambiada`, `historial:cambiado`).
+  - **Command + Composite (`HistorialComandos` y `ComandosAnimacion`):** Historial completo de Deshacer / Rehacer (`Ctrl+Z` / `Ctrl+Y`) para creación, edición, sobrescritura, movimiento, duplicación, desplazamiento, simplificación, importación y eliminación de claves o pistas.
+  - **Strategy (`EstrategiasInterpolacion` y `ImportadoresAnimacion`):** Curvas de interpolación intercambiables por clave (`Suave`, `Lineal`, `EntradaSuave`, `SalidaSuave`, `Escalon`) y estrategias unificadas de importación.
+- **Línea de Tiempo Optimizada de Alto Rendimiento:**
+  - **Renderizado bajo demanda (*Dirty-Flag* + `requestAnimationFrame`):** El bucle principal solo solicita redibujado del timeline al reproducir o cuando ocurre una interacción real.
+  - **Búsqueda Binaria `O(log K)` y Cachés:** Evaluación de pistas en `GestorAnimacion` con búferes temporales preasignados (0 GC), culling de claves visibles fuera de pantalla, caché de filas *Dope-Sheet* y caché *offscreen* de la forma de onda del audio.
+  - **Controles por Capa y Pista:** Resumen interactivo *Dope-Sheet* al colapsar capas, botones rápidos de **Clave (`◆`)**, **Silenciar (`M`)** y **Bloquear (`🔒`)**, rango de bucle parcial, filtro de pistas y divisor vertical redimensionable.
+- **Creación, Sobrescritura y Eliminación Ágil de Keyframes:**
+  - Botones contextuales inteligentes que cambian visualmente a **Sobrescribir** cuando ya existe una clave en el cabezal actual, además de **Auto-Clave** al posar huesos o ajustar deslizadores.
+  - Multiselección por caja de arrastre o `Shift+Clic`, duplicación directa con `Alt+Arrastre`, copiar/pegar/duplicar (`Ctrl+C` / `Ctrl+V` / `Ctrl+D`), doble clic sobre pista para insertar/sobrescribir, menú contextual por clic derecho y panel **Inspector de Clave** (*Master-Detail*).
+- **Asistente de Importación Multi-Formato (`.vrma`, `.bvh`, `.glb`, `.gltf`, `.json`):**
+  - Vista previa antes de importar, inserción en el cabezal o tiempo personalizado, modos de combinación / sobrescritura de rango / reemplazo de capa, control de velocidad y simplificación automática de curvas mediante **Ramer-Douglas-Peucker (RDP)**.
+- **Interfaz de Estudio Renovada y Accesible:**
+  - Tema oscuro estructurado en capas `@layer` con pestañas (`Animar`, `Escena`, `Captura` | `Pose`, `Clave`, `Rostro`), barra flotante de gizmo en el visor (`Q/W/E/R`, Esqueleto, Espejar L↔R, Reposo), diálogos modales nativos `<dialog>`, menú contextual `popover` e iconos SVG vectoriales.
 
 - **Recuperación Suave de Extremidades (Decay):** Cuando las piernas o brazos salen del plano de la cámara (baja visibilidad), ya no se congelan en poses incómodas. El algoritmo calcula de manera predictiva su cinemática para devolverlos fluidamente a una pose de reposo natural utilizando filtros de inercia cuaterniónica.
 - **Cinemática Inversa y Directa (Local Rotations):** El motor matemático ahora calcula la rotación relativa de cada hueso respecto a su hueso padre (inv(parent) * child), solucionando deformaciones de muñecas y codos rotos al interpretar correctamente la jerarquía ósea del VRM.
